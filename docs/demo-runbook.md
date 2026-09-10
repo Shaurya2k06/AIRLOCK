@@ -36,6 +36,8 @@ never accepts a caller-supplied target, selector, or raw calldata.
 
 ## Negative cases to show
 
+- mutated release fixture fails verification against the approved manifest
+  (`../fixtures/releases/mutated`);
 - unapproved recipient;
 - value above the validator or capability ceiling;
 - changed calldata hash;

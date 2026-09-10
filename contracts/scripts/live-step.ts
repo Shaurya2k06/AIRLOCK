@@ -8,6 +8,7 @@ import { verifyManifest } from "./manifest.mjs";
 
 const issuerAbi = [
     "function issue(bytes32 orgId,bytes32 agentId,bytes32 releaseDigest,bytes32 policyHash) returns (bytes32 capabilityId)",
+    "function get(bytes32) view returns (tuple(bytes32 orgId,bytes32 agentId,bytes32 releaseDigest,bytes32 policyHash,bytes32 scopeRoot,address runtimeKey,uint128 spendCap,uint128 spent,uint128 perCallValueCap,uint32 callCap,uint32 callsUsed,uint64 notBefore,uint64 expiresAt,uint64 epoch,bool revoked))",
 ];
 const routerAbi = [
     "function execute((bytes32 capabilityId,bytes32 agentId,address target,bytes4 functionSelector,bytes32 calldataHash,uint256 value,uint64 deadline,uint64 actionNonce,bytes32 idempotencyKey,bytes32 scopeLeaf,bytes32[] scopeProof,bytes data) intent,bytes signature) returns (bytes)",
@@ -75,6 +76,21 @@ async function proposedPayment(state: any): Promise<{ recipient: string; amount:
     return { recipient, amount: amount.toString() };
 }
 
+async function assertCapabilityBinding(issuer: Contract, capabilityId: string, state: any, runtime: Wallet): Promise<void> {
+    const capability = await issuer.get(capabilityId);
+    const runtimeAddress = await runtime.getAddress();
+    if (
+        capability.orgId.toLowerCase() !== state.release.orgId.toLowerCase()
+            || capability.agentId.toLowerCase() !== state.release.agentId.toLowerCase()
+            || capability.releaseDigest.toLowerCase() !== state.release.releaseDigest.toLowerCase()
+            || capability.policyHash.toLowerCase() !== state.release.policyHash.toLowerCase()
+            || getAddress(capability.runtimeKey) !== getAddress(runtimeAddress)
+            || capability.revoked
+    ) {
+        throw new Error("issued capability does not match the verified release or runtime signer");
+    }
+}
+
 async function main() {
     const step = process.env.LIVE_STEP?.trim();
     if (!step || !["execute", "revoke", "blocked"].includes(step)) {
@@ -132,6 +148,9 @@ async function main() {
     ]);
 
     if (step === "execute") {
+        if (getAddress(state.release.runtimeKey) !== getAddress(await runtime.getAddress())) {
+            throw new Error("runtime signer does not match the approved runtime key");
+        }
         const capabilityId = await issuer.issue.staticCall(
             state.release.orgId,
             state.release.agentId,
@@ -145,6 +164,7 @@ async function main() {
             state.release.policyHash,
         );
         await issueTransaction.wait();
+        await assertCapabilityBinding(issuer, capabilityId, state, runtime);
         const intent = paymentIntent(data, state, capabilityId, 0);
         const signature = await runtime.signTypedData(
             {
@@ -169,6 +189,7 @@ async function main() {
     }
 
     if (!state.live?.capabilityId) throw new Error("Run LIVE_STEP=execute first");
+    await assertCapabilityBinding(issuer, state.live.capabilityId, state, runtime);
     const intent = paymentIntent(data, state, state.live.capabilityId, 1);
     const signature = await runtime.signTypedData(
         {

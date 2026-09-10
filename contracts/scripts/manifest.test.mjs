@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { test } from "node:test";
 import { artifactProof, buildManifest, verifyManifest, verifyDocument } from "./manifest.mjs";
 
@@ -70,5 +70,24 @@ test("manifest rejects symlink escapes", async () => {
     } finally {
         await rm(root, { recursive: true, force: true });
         await rm(outside, { force: true });
+    }
+});
+
+test("committed mutated release cannot verify against the approved manifest", async () => {
+    const outputRoot = await mkdtemp(join(tmpdir(), "airlock-mutated-release-"));
+    const approvedRoot = resolve(process.cwd(), "../fixtures/releases/demo");
+    const mutatedRoot = resolve(process.cwd(), "../fixtures/releases/mutated");
+    const approvedManifest = join(outputRoot, "approved.json");
+    const mutatedManifest = join(outputRoot, "mutated.json");
+    try {
+        const approved = await buildManifest({ input: approvedRoot, output: approvedManifest });
+        const mutated = await buildManifest({ input: mutatedRoot, output: mutatedManifest });
+        assert.notEqual(mutated.releaseDigest, approved.releaseDigest);
+        await assert.rejects(
+            verifyManifest(approvedManifest, mutatedRoot),
+            /source files do not match manifest/,
+        );
+    } finally {
+        await rm(outputRoot, { recursive: true, force: true });
     }
 });
