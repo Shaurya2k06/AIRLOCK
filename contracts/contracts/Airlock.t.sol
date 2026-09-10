@@ -16,13 +16,13 @@ import {
     IReceiptDecoder,
     MockBlockProver,
     MockReceiptDecoder,
+    MockStablecoin,
     OfficialReceiptDecoder,
     PolicyRegistry,
     ReleaseStatusRegistry,
     RoleAddress,
     ToolRouter,
-    VendorPayments,
-    AllowlistedRecipientPaymentValidator
+    AllowlistedStablecoinPaymentValidator
 } from "./Airlock.sol";
 
 contract OfficialReceiptDecoderTest is Test {
@@ -85,9 +85,9 @@ contract AirlockTest is Test {
     CapabilityIssuer private issuer;
     ToolRouter private router;
     AgentVault private vault;
-    VendorPayments private vendor;
+    MockStablecoin private stablecoin;
     BoundedDepositProtocol private protocol;
-    AllowlistedRecipientPaymentValidator private paymentValidator;
+    AllowlistedStablecoinPaymentValidator private paymentValidator;
     BoundedDepositValidator private depositValidator;
 
     address private runtimeKey;
@@ -133,13 +133,13 @@ contract AirlockTest is Test {
         vm.prank(admin);
         issuer.setRouter(address(router));
 
-        vendor = new VendorPayments();
+        stablecoin = new MockStablecoin();
         protocol = new BoundedDepositProtocol();
-        paymentValidator = new AllowlistedRecipientPaymentValidator(
-            address(vendor),
+        paymentValidator = new AllowlistedStablecoinPaymentValidator(
+            address(stablecoin),
             vendorRecipient,
             0.25 ether,
-            VendorPayments.pay.selector
+            MockStablecoin.transfer.selector
         );
         depositValidator = new BoundedDepositValidator(
             address(protocol),
@@ -149,8 +149,8 @@ contract AirlockTest is Test {
 
         vm.prank(admin);
         paymentLeaf = router.registerAction(
-            address(vendor),
-            VendorPayments.pay.selector,
+            address(stablecoin),
+            MockStablecoin.transfer.selector,
             address(paymentValidator),
             paymentConstraints
         );
@@ -183,6 +183,7 @@ contract AirlockTest is Test {
         vm.prank(address(this));
         capabilityId = issuer.issue(orgId, agentId, releaseDigest, policyHash);
         vm.deal(address(vault), 1 ether);
+        stablecoin.mint(address(vault), 1 ether);
     }
 
     function test_SourceRolesAndProofImports() public {
@@ -234,6 +235,27 @@ contract AirlockTest is Test {
         vm.expectRevert(AirlockAttestcoinAdapter.InvalidStatus.selector);
         adapter.importStatus(_request(invalidStatusTx, 0));
         assertFalse(evidence.getStatus(evidence.releaseKey(invalidStatusOrg, invalidStatusDigest)).exists);
+
+        bytes32 failedTx = keccak256("failed-source-receipt");
+        _setReceiptStatus(
+            failedTx,
+            address(artifactRegistry),
+            _topics(adapter.ARTIFACT_TOPIC(), malformedOrg, malformedReleaseId, malformedDigest),
+            new bytes(352),
+            0
+        );
+        vm.expectRevert(AirlockAttestcoinAdapter.FailedReceipt.selector);
+        adapter.importArtifact(_request(failedTx, 0));
+
+        bytes32 wrongLogIndexTx = keccak256("wrong-log-index");
+        _setReceipt(
+            wrongLogIndexTx,
+            address(artifactRegistry),
+            _topics(adapter.ARTIFACT_TOPIC(), malformedOrg, malformedReleaseId, malformedDigest),
+            new bytes(352)
+        );
+        vm.expectRevert(AirlockAttestcoinAdapter.MalformedLog.selector);
+        adapter.importArtifact(_request(wrongLogIndexTx, 1));
     }
 
     function test_AdapterRejectsWrongProofBindings() public {
@@ -348,20 +370,24 @@ contract AirlockTest is Test {
     }
 
     function test_CapabilityAndRouterContainment() public {
-        bytes memory paymentData = abi.encodeWithSelector(VendorPayments.pay.selector, vendorRecipient);
+        bytes memory paymentData = abi.encodeWithSelector(
+            MockStablecoin.transfer.selector,
+            vendorRecipient,
+            uint256(0.2 ether)
+        );
         ToolRouter.ToolIntent memory payment = _intent(
             paymentLeaf,
-            address(vendor),
-            VendorPayments.pay.selector,
+            address(stablecoin),
+            MockStablecoin.transfer.selector,
             paymentData,
-            0.2 ether,
+            0,
             0,
             keccak256("payment-0")
         );
         bytes memory signature = _sign(payment);
         router.execute(payment, signature);
 
-        assertEq(vendor.received(vendorRecipient), 0.2 ether);
+        assertEq(stablecoin.balanceOf(vendorRecipient), 0.2 ether);
 
         bytes memory depositData = abi.encodeWithSelector(
             BoundedDepositProtocol.deposit.selector,
@@ -378,6 +404,7 @@ contract AirlockTest is Test {
         );
         router.execute(deposit, _sign(deposit));
         assertEq(protocol.deposits(keccak256("position-1")), 0.1 ether);
+        assertEq(issuer.get(capabilityId).spent, 0.3 ether);
 
         ToolRouter.ToolIntent memory replay = payment;
         replay.idempotencyKey = keccak256("payment-replay");
@@ -388,71 +415,97 @@ contract AirlockTest is Test {
     }
 
     function test_RejectedActionsAndProvenRevocation() public {
-        bytes memory wrongRecipientData = abi.encodeWithSelector(VendorPayments.pay.selector, address(0xBAD));
+        bytes memory wrongRecipientData = abi.encodeWithSelector(
+            MockStablecoin.transfer.selector,
+            address(0xBAD),
+            uint256(0.1 ether)
+        );
         ToolRouter.ToolIntent memory wrongRecipient = _intent(
             paymentLeaf,
-            address(vendor),
-            VendorPayments.pay.selector,
+            address(stablecoin),
+            MockStablecoin.transfer.selector,
             wrongRecipientData,
-            0.1 ether,
+            0,
             0,
             keccak256("wrong-recipient")
         );
         bytes memory wrongRecipientSignature = _sign(wrongRecipient);
-        vm.expectRevert(AllowlistedRecipientPaymentValidator.InvalidPayment.selector);
+        vm.expectRevert(AllowlistedStablecoinPaymentValidator.InvalidPayment.selector);
         router.execute(wrongRecipient, wrongRecipientSignature);
 
-        bytes memory tooLargeData = abi.encodeWithSelector(VendorPayments.pay.selector, vendorRecipient);
+        bytes memory tooLargeData = abi.encodeWithSelector(
+            MockStablecoin.transfer.selector,
+            vendorRecipient,
+            uint256(0.3 ether)
+        );
         ToolRouter.ToolIntent memory tooLarge = _intent(
             paymentLeaf,
-            address(vendor),
-            VendorPayments.pay.selector,
+            address(stablecoin),
+            MockStablecoin.transfer.selector,
             tooLargeData,
-            0.3 ether,
+            0,
             0,
             keccak256("too-large")
         );
         bytes memory tooLargeSignature = _sign(tooLarge);
-        vm.expectRevert(AllowlistedRecipientPaymentValidator.InvalidPayment.selector);
+        vm.expectRevert(AllowlistedStablecoinPaymentValidator.InvalidPayment.selector);
         router.execute(tooLarge, tooLargeSignature);
 
         _importRevocation();
-        bytes memory validData = abi.encodeWithSelector(VendorPayments.pay.selector, vendorRecipient);
+        bytes memory validData = abi.encodeWithSelector(
+            MockStablecoin.transfer.selector,
+            vendorRecipient,
+            uint256(0.1 ether)
+        );
         ToolRouter.ToolIntent memory validAfterRevocation = _intent(
             paymentLeaf,
-            address(vendor),
-            VendorPayments.pay.selector,
+            address(stablecoin),
+            MockStablecoin.transfer.selector,
             validData,
-            0.1 ether,
+            0,
             0,
             keccak256("after-revocation")
         );
         bytes memory revokedSignature = _sign(validAfterRevocation);
         vm.expectRevert(CapabilityIssuer.PausedCapability.selector);
         router.execute(validAfterRevocation, revokedSignature);
+
+        bytes32 reactivationTx = keccak256("reactivation-after-revocation");
+        _setReceipt(
+            reactivationTx,
+            address(statusRegistry),
+            _topics(adapter.STATUS_TOPIC(), orgId, releaseDigest, bytes32(uint256(1))),
+            abi.encode(uint64(3), uint64(block.timestamp), uint64(block.timestamp + 1 days))
+        );
+        vm.expectRevert(EvidenceRegistry.AlreadyRevoked.selector);
+        adapter.importStatus(_request(reactivationTx, 0));
     }
 
     function test_GuardianTargetPauseOnlyReducesAuthority() public {
-        bytes memory data = abi.encodeWithSelector(VendorPayments.pay.selector, vendorRecipient);
+        bytes memory data = abi.encodeWithSelector(
+            MockStablecoin.transfer.selector,
+            vendorRecipient,
+            uint256(0.1 ether)
+        );
         ToolRouter.ToolIntent memory intent = _intent(
             paymentLeaf,
-            address(vendor),
-            VendorPayments.pay.selector,
+            address(stablecoin),
+            MockStablecoin.transfer.selector,
             data,
-            0.1 ether,
+            0,
             0,
             keccak256("target-pause")
         );
         vm.prank(guardian);
-        issuer.pauseTarget(address(vendor));
+        issuer.pauseTarget(address(stablecoin));
         bytes memory pausedSignature = _sign(intent);
         vm.expectRevert(ToolRouter.PausedTarget.selector);
         router.execute(intent, pausedSignature);
 
         vm.prank(admin);
-        issuer.unpauseTarget(address(vendor));
+        issuer.unpauseTarget(address(stablecoin));
         router.execute(intent, _sign(intent));
-        assertEq(vendor.received(vendorRecipient), 0.1 ether);
+        assertEq(stablecoin.balanceOf(vendorRecipient), 0.1 ether);
     }
 
     function test_AdapterGuardianPauseRequiresAdminToUnpause() public {
@@ -463,6 +516,29 @@ contract AirlockTest is Test {
         adapter.unpause();
         vm.prank(admin);
         adapter.unpause();
+    }
+
+    function test_VaultAndRuntimeContainment() public {
+        bytes memory data = abi.encodeWithSelector(
+            MockStablecoin.transfer.selector,
+            vendorRecipient,
+            uint256(0.1 ether)
+        );
+        vm.expectRevert(AgentVault.Unauthorized.selector);
+        vault.execute(address(stablecoin), 0, data);
+
+        ToolRouter.ToolIntent memory intent = _intent(
+            paymentLeaf,
+            address(stablecoin),
+            MockStablecoin.transfer.selector,
+            data,
+            0,
+            0,
+            keccak256("wrong-runtime")
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(0xA11CF, router.hashIntent(intent));
+        vm.expectRevert(ToolRouter.InvalidSignature.selector);
+        router.execute(intent, abi.encodePacked(r, s, v));
     }
 
     function _importAllEvidence() internal {
@@ -553,8 +629,18 @@ contract AirlockTest is Test {
     }
 
     function _setReceipt(bytes32 txHash, address emitter, bytes32[] memory topics, bytes memory data) internal {
+        _setReceiptStatus(txHash, emitter, topics, data, 1);
+    }
+
+    function _setReceiptStatus(
+        bytes32 txHash,
+        address emitter,
+        bytes32[] memory topics,
+        bytes memory data,
+        uint8 status
+    ) internal {
         prover.setProof(abi.encode(txHash), true);
-        decoder.setReceipt(abi.encode(txHash), 1, emitter, topics, data);
+        decoder.setReceipt(abi.encode(txHash), status, emitter, topics, data);
     }
 
     function _topics(bytes32 topic0, bytes32 a, bytes32 b, bytes32 c)

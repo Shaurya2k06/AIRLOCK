@@ -24,6 +24,12 @@ The Creditcoin adapter performs the security checks again inside the
 transaction. Off-chain decoding or worker interpretation is never accepted as
 evidence.
 
+`worker.ts` watches only the five configured source event streams, records an
+observed cursor before submission, retries transient imports, and delegates the
+actual proof build/import to `import-proof.ts`. It has only the configured
+Creditcoin worker key, so it cannot write evidence directly or issue
+capabilities.
+
 ## Local verification
 
 Local tests use `MockBlockProver` and `MockReceiptDecoder` solely to exercise

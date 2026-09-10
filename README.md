@@ -31,8 +31,9 @@ path without requiring a wallet, RPC endpoint, or proof-builder account.
 
 The live path is available from `contracts`: `npm run deploy-live` deploys and
 seeds the two-chain demo, then `IMPORT_KIND=<kind> npm run import-proof` submits
-each real proof through Creditcoin's BlockProver. The worker submits proofs but
-has no evidence-writing or capability-issuance authority.
+each real proof through Creditcoin's BlockProver. `npm run worker` automates
+source-event discovery and retries; it has no evidence-writing or
+capability-issuance authority.
 
 After the four imports, `LIVE_STEP=execute npm run live-step` runs the allowed
 action; `LIVE_STEP=revoke`, a revocation proof import, and
@@ -49,13 +50,15 @@ not configuration inputs.
 
 - `contracts/contracts/Airlock.sol` — source registries, evidence adapter,
   official decoder boundary, policy, capabilities, EIP-712 router, vault,
-  validators, and local proof fixtures.
+  mock stablecoin/deposit validators, and local proof fixtures.
 - `contracts/contracts/Airlock.t.sol` — end-to-end contract scenarios,
   including proven revocation and negative actions.
 - `contracts/scripts/manifest.mjs` — canonical CBOR manifest, artifact Merkle
   root, release digest, verification, and file proofs.
 - `contracts/scripts/deploy-live.ts` and `contracts/scripts/import-proof.ts` —
   reproducible Sepolia → Creditcoin deployment and proof submission.
+- `contracts/scripts/worker.ts` — cursor-backed source watcher and proof retry
+  loop.
 - `server/index.js` — fixture/live read-only control-plane API.
 - `client/src/App.tsx` — evidence, capability, and enforcement console.
 - `docs/` — architecture, Attestcoin integration, threat model, evidence

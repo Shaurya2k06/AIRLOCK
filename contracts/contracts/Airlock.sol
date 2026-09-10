@@ -1219,7 +1219,7 @@ interface IIntentValidator {
         bytes calldata data,
         uint256 value,
         bytes32 constraintsHash
-    ) external view;
+    ) external view returns (uint256 chargedValue);
 }
 
 contract AgentVault {
@@ -1325,7 +1325,13 @@ contract ToolRouter is RoleAddress {
     bool private locked;
 
     event ActionRegistered(bytes32 indexed scopeLeaf, address indexed target, bytes4 indexed selector);
-    event ActionExecuted(bytes32 indexed capabilityId, bytes32 indexed idempotencyKey, address target, uint256 value);
+    event ActionExecuted(
+        bytes32 indexed capabilityId,
+        bytes32 indexed idempotencyKey,
+        address target,
+        uint256 value,
+        uint256 chargedValue
+    );
     event ActionDenied(bytes32 indexed capabilityId, bytes32 indexed idempotencyKey, bytes32 reason);
 
     constructor(address admin, address issuer_, address vault_) RoleAddress(admin) {
@@ -1405,7 +1411,7 @@ contract ToolRouter is RoleAddress {
         ) revert UnsupportedAction();
 
         _checkSignature(intent, signature, capability.runtimeKey);
-        IIntentValidator(action.validator).validate(
+        uint256 chargedValue = IIntentValidator(action.validator).validate(
             intent.target,
             intent.functionSelector,
             intent.data,
@@ -1413,11 +1419,11 @@ contract ToolRouter is RoleAddress {
             action.constraintsHash
         );
 
-        issuer.consume(intent.capabilityId, intent.value);
+        issuer.consume(intent.capabilityId, chargedValue);
         nextNonce[intent.capabilityId] = intent.actionNonce + 1;
         usedIdempotency[intent.idempotencyKey] = true;
         result = vault.execute(intent.target, intent.value, intent.data);
-        emit ActionExecuted(intent.capabilityId, intent.idempotencyKey, intent.target, intent.value);
+        emit ActionExecuted(intent.capabilityId, intent.idempotencyKey, intent.target, intent.value, chargedValue);
         locked = false;
     }
 
@@ -1443,39 +1449,60 @@ contract ToolRouter is RoleAddress {
     }
 }
 
-contract AllowlistedRecipientPaymentValidator is IIntentValidator {
+contract MockStablecoin {
+    error InsufficientBalance();
+
+    mapping(address => uint256) public balanceOf;
+
+    event Transfer(address indexed from, address indexed to, uint256 amount);
+
+    function mint(address recipient, uint256 amount) external {
+        balanceOf[recipient] += amount;
+        emit Transfer(address(0), recipient, amount);
+    }
+
+    function transfer(address recipient, uint256 amount) external returns (bool) {
+        if (balanceOf[msg.sender] < amount) revert InsufficientBalance();
+        balanceOf[msg.sender] -= amount;
+        balanceOf[recipient] += amount;
+        emit Transfer(msg.sender, recipient, amount);
+        return true;
+    }
+}
+
+contract AllowlistedStablecoinPaymentValidator is IIntentValidator {
     error InvalidPayment();
 
-    address public immutable expectedTarget;
+    address public immutable token;
     address public immutable recipient;
-    uint256 public immutable maxValue;
+    uint256 public immutable maxAmount;
     bytes4 public immutable expectedSelector;
 
-    constructor(address target_, address recipient_, uint256 maxValue_, bytes4 selector_) {
-        expectedTarget = target_;
+    constructor(address token_, address recipient_, uint256 maxAmount_, bytes4 selector_) {
+        token = token_;
         recipient = recipient_;
-        maxValue = maxValue_;
+        maxAmount = maxAmount_;
         expectedSelector = selector_;
     }
 
     function validate(
-        address target_,
+        address target,
         bytes4 selector,
         bytes calldata data,
         uint256 value,
         bytes32
-    ) external view {
+    ) external view returns (uint256 chargedValue) {
         if (
-            target_ != expectedTarget
+            target != token
                 || selector != expectedSelector
-                || value == 0
-                || value > maxValue
-                || data.length != 36
+                || value != 0
+                || data.length != 68
         ) {
             revert InvalidPayment();
         }
-        address requestedRecipient = abi.decode(data[4:], (address));
-        if (requestedRecipient != recipient) revert InvalidPayment();
+        (address requestedRecipient, uint256 amount) = abi.decode(data[4:], (address, uint256));
+        if (requestedRecipient != recipient || amount == 0 || amount > maxAmount) revert InvalidPayment();
+        return amount;
     }
 }
 
@@ -1498,20 +1525,11 @@ contract BoundedDepositValidator is IIntentValidator {
         bytes calldata data,
         uint256 value,
         bytes32
-    ) external view {
+    ) external view returns (uint256 chargedValue) {
         if (target != protocol || selector != expectedSelector || value == 0 || value > maxValue || data.length != 36) {
             revert InvalidDeposit();
         }
-    }
-}
-
-contract VendorPayments {
-    mapping(address => uint256) public received;
-    event Paid(address indexed recipient, uint256 amount);
-
-    function pay(address recipient) external payable {
-        received[recipient] += msg.value;
-        emit Paid(recipient, msg.value);
+        return value;
     }
 }
 

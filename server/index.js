@@ -155,8 +155,14 @@ function body(request) {
   })
 }
 
-function simulate(intent, policy = fixtureState.policy) {
+function simulate(intent, policy = fixtureState.policy, current = fixtureState) {
   if (!intent || typeof intent !== 'object') return { allowed: false, reason: 'invalid intent' }
+  if (current.dataSource === 'creditcoin-chain' && current.release.status !== 'ACTIVE') {
+    return { allowed: false, reason: `release is ${current.release.status.toLowerCase()}` }
+  }
+  if (current.dataSource === 'creditcoin-chain' && current.capability.status !== 'ACTIVE') {
+    return { allowed: false, reason: `capability is ${current.capability.status.toLowerCase()}` }
+  }
   const amount = Number(intent.amount)
   if (intent.recipient !== policy.recipient) return { allowed: false, reason: 'recipient is outside the approved scope' }
   if (!Number.isFinite(amount) || amount <= 0 || amount > policy.maxPayment) return { allowed: false, reason: 'value exceeds the per-call validator ceiling' }
@@ -186,7 +192,7 @@ const server = http.createServer(async (request, response) => {
   if (request.method === 'POST' && url.pathname === '/api/actions/simulate') {
     try {
       const current = await overview()
-      json(response, 200, simulate(await body(request), current.policy))
+      json(response, 200, simulate(await body(request), current.policy, current))
     } catch (error) {
       json(response, 400, { allowed: false, reason: error.message })
     }

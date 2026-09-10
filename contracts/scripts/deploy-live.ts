@@ -115,7 +115,7 @@ async function main() {
     const paymentAmount = parseEther(required("PAYMENT_AMOUNT"));
     const depositTarget = bytes32(process.env.DEPOSIT_TARGET?.trim() || "airlock-demo-position", "DEPOSIT_TARGET");
     const releaseDirectory = resolve(process.cwd(), process.env.RELEASE_DIR?.trim() || "../fixtures/releases/demo");
-    const paymentSelector = selector("pay(address)");
+    const paymentSelector = selector("transfer(address,uint256)");
     const depositSelector = selector("deposit(bytes32)");
     const paymentConstraints = id("AIRLOCK_PAYMENT_V1");
     const depositConstraints = id("AIRLOCK_DEPOSIT_V1");
@@ -125,12 +125,12 @@ async function main() {
     const approvalRegistry = await deploy("DeploymentApprovalRegistry", sourceDeployer, await approver.getAddress());
     const statusRegistry = await deploy("ReleaseStatusRegistry", sourceDeployer, await statusAuthority.getAddress());
 
-    const vendor = await deploy("VendorPayments", creditcoinDeployer);
+    const paymentToken = await deploy("MockStablecoin", creditcoinDeployer);
     const protocol = await deploy("BoundedDepositProtocol", creditcoinDeployer);
     const paymentValidator = await deploy(
-        "AllowlistedRecipientPaymentValidator",
+        "AllowlistedStablecoinPaymentValidator",
         creditcoinDeployer,
-        await vendor.getAddress(),
+        await paymentToken.getAddress(),
         recipient,
         paymentAmount,
         paymentSelector,
@@ -142,7 +142,7 @@ async function main() {
         parseEther("0.1"),
         depositSelector,
     );
-    const paymentLeaf = scopeLeaf(await vendor.getAddress(), paymentSelector, await paymentValidator.getAddress(), paymentConstraints);
+    const paymentLeaf = scopeLeaf(await paymentToken.getAddress(), paymentSelector, await paymentValidator.getAddress(), paymentConstraints);
     const depositLeaf = scopeLeaf(await protocol.getAddress(), depositSelector, await depositValidator.getAddress(), depositConstraints);
     const scopeRoot = pair(paymentLeaf, depositLeaf);
     const manifest = await buildManifest({
@@ -169,7 +169,8 @@ async function main() {
     } = manifest.payload.components;
     const suiteHash = manifest.payload.suiteId;
     const evaluatorSetHash = id("AIRLOCK_EVALUATORS_V1");
-    const spendCeiling = paymentAmount + parseEther("0.1");
+    const depositAmount = parseEther("0.1");
+    const spendCeiling = paymentAmount + depositAmount;
     const perCallCeiling = paymentAmount;
     const policyInput = {
         approvedSuiteHash: suiteHash,
@@ -232,12 +233,13 @@ async function main() {
     await send(evidence, "setAdapter", await adapter.getAddress());
     await send(vault, "setRouter", await router.getAddress());
     await send(issuer, "setRouter", await router.getAddress());
-    await send(router, "registerAction", await vendor.getAddress(), paymentSelector, await paymentValidator.getAddress(), paymentConstraints);
+    await send(router, "registerAction", await paymentToken.getAddress(), paymentSelector, await paymentValidator.getAddress(), paymentConstraints);
     await send(router, "registerAction", await protocol.getAddress(), depositSelector, await depositValidator.getAddress(), depositConstraints);
     await send(policies, "register", policyInput);
+    await send(paymentToken, "mint", await vault.getAddress(), spendCeiling);
     const fundingTransaction = await creditcoinDeployer.sendTransaction({
         to: await vault.getAddress(),
-        value: spendCeiling,
+        value: depositAmount,
     });
     await fundingTransaction.wait();
 
@@ -315,7 +317,7 @@ async function main() {
             issuer: await issuer.getAddress(),
             vault: await vault.getAddress(),
             router: await router.getAddress(),
-            vendor: await vendor.getAddress(),
+            paymentToken: await paymentToken.getAddress(),
             protocol: await protocol.getAddress(),
             paymentValidator: await paymentValidator.getAddress(),
             depositValidator: await depositValidator.getAddress(),

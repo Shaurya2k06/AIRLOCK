@@ -10,6 +10,7 @@
     "manifest:test": "node --test scripts/manifest.test.mjs",
     "deploy-live": "hardhat run scripts/deploy-live.ts",
     "import-proof": "hardhat run scripts/import-proof.ts",
+    "worker": "hardhat run scripts/worker.ts",
     "live-step": "hardhat run scripts/live-step.ts",
     "ci": "npm run build && npm run typecheck && npm run manifest:test && npm test"
   },

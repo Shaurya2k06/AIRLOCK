@@ -27,8 +27,8 @@ local fixtures. `OfficialReceiptDecoder` wraps the pinned `@gluwa/asc-contracts`
 EVM V1 decoder, while the adapter calls Creditcoin's native BlockProver ABI.
 
 The test covers separate source roles, proof and replay checks, deterministic
-issuance, EIP-712 intents, scope proofs, validators, vault containment,
-budgets, idempotency, and proven revocation.
+issuance, EIP-712 intents, scope proofs, mock-stablecoin and deposit
+validators, vault containment, budgets, idempotency, and proven revocation.
 
 ## Live testnet path
 
@@ -52,3 +52,8 @@ official Proof Builder for the proof, and submits it with the gas-only worker.
 `live-step` issues and executes the capability, emits revocation after the
 allowed action, and simulates the post-revocation action to prove it is
 blocked.
+
+For continuous source-event discovery, run `npm run worker`. It persists a
+cursor and event journal in `worker-state.json`, retries transient proof
+failures, and treats adapter replay as already consumed. `WORKER_ONCE=true`
+performs one scan for a smoke test.

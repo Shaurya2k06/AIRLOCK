@@ -48,10 +48,10 @@ function paymentIntent(data: string, deploymentState: any, capabilityId: string,
     return {
         capabilityId,
         agentId: deploymentState.release.agentId,
-        target: deploymentState.creditcoin.vendor,
-        functionSelector: id("pay(address)").slice(0, 10),
+        target: deploymentState.creditcoin.paymentToken,
+        functionSelector: id("transfer(address,uint256)").slice(0, 10),
         calldataHash: keccak256(data),
-        value: BigInt(deploymentState.release.paymentAmount),
+        value: 0n,
         deadline: BigInt(Math.floor(Date.now() / 1000) + 300),
         actionNonce,
         idempotencyKey: id(`AIRLOCK_LIVE_ACTION:${actionNonce}`),
@@ -102,8 +102,9 @@ async function main() {
     const worker = new Wallet(required("CREDITCOIN_WORKER_PRIVATE_KEY"), creditcoinRpc);
     const issuer = new Contract(state.creditcoin.issuer, issuerAbi, worker);
     const router = new Contract(state.creditcoin.router, routerAbi, worker);
-    const data = new Interface(["function pay(address recipient)"]).encodeFunctionData("pay", [
+    const data = new Interface(["function transfer(address recipient,uint256 amount)"]).encodeFunctionData("transfer", [
         state.release.paymentRecipient,
+        state.release.paymentAmount,
     ]);
 
     if (step === "execute") {

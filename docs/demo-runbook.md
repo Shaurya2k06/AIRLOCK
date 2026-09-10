@@ -27,6 +27,11 @@ live Attestcoin gate.
 6. Import the revocation proof.
 7. Run `LIVE_STEP=blocked npm run live-step`; the router simulation must revert.
 
+The same sequence can be driven by `WORKER_ONCE=true npm run worker` for a
+single source scan, or `npm run worker` for polling/retry behavior.
+The deployed vault holds the demo `MockStablecoin` for the vendor payment and
+native test value only for the bounded deposit action.
+
 ## Negative cases to show
 
 - unapproved recipient;
