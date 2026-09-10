@@ -1076,6 +1076,7 @@ contract CapabilityIssuer is RoleAddress {
         }
         if (artifact.orgId != orgId || artifact.releaseDigest != releaseDigest) revert Mismatch();
         if (evaluation.orgId != orgId || evaluation.releaseDigest != releaseDigest) revert Mismatch();
+        if (artifact.releaseId != evaluation.releaseId) revert Mismatch();
         if (approval.orgId != orgId || approval.agentId != agentId || approval.releaseDigest != releaseDigest) {
             revert Mismatch();
         }
@@ -1096,7 +1097,12 @@ contract CapabilityIssuer is RoleAddress {
 
         uint64 nowTime = uint64(block.timestamp);
         if (nowTime < approval.validAfter || nowTime >= approval.validUntil) revert InvalidWindow();
-        if (nowTime < status.issuedAt || nowTime >= evaluation.validUntil || nowTime >= status.validUntil) {
+        if (
+            nowTime < evaluation.evaluatedAt
+                || nowTime < status.issuedAt
+                || nowTime >= evaluation.validUntil
+                || nowTime >= status.validUntil
+        ) {
             revert InvalidWindow();
         }
         if (nowTime > status.issuedAt + policy.statusFreshness) revert InvalidWindow();
@@ -1482,6 +1488,7 @@ contract MockStablecoin {
 }
 
 contract AllowlistedStablecoinPaymentValidator is IIntentValidator {
+    error InvalidConfiguration();
     error InvalidPayment();
 
     address public immutable token;
@@ -1490,6 +1497,9 @@ contract AllowlistedStablecoinPaymentValidator is IIntentValidator {
     bytes4 public immutable expectedSelector;
 
     constructor(address token_, address recipient_, uint256 maxAmount_, bytes4 selector_) {
+        if (token_ == address(0) || recipient_ == address(0) || maxAmount_ == 0 || selector_ == bytes4(0)) {
+            revert InvalidConfiguration();
+        }
         token = token_;
         recipient = recipient_;
         maxAmount = maxAmount_;
@@ -1518,6 +1528,7 @@ contract AllowlistedStablecoinPaymentValidator is IIntentValidator {
 }
 
 contract BoundedDepositValidator is IIntentValidator {
+    error InvalidConfiguration();
     error InvalidDeposit();
 
     address public immutable protocol;
@@ -1525,6 +1536,7 @@ contract BoundedDepositValidator is IIntentValidator {
     bytes4 public immutable expectedSelector;
 
     constructor(address protocol_, uint256 maxValue_, bytes4 selector_) {
+        if (protocol_ == address(0) || maxValue_ == 0 || selector_ == bytes4(0)) revert InvalidConfiguration();
         protocol = protocol_;
         maxValue = maxValue_;
         expectedSelector = selector_;

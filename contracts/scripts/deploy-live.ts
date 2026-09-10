@@ -94,6 +94,7 @@ async function main() {
     const approver = new Wallet(required("SOURCE_APPROVER_PRIVATE_KEY"), sourceRpc);
     const statusAuthority = new Wallet(required("SOURCE_STATUS_PRIVATE_KEY"), sourceRpc);
     const creditcoinDeployer = new Wallet(required("CREDITCOIN_DEPLOYER_PRIVATE_KEY"), creditcoinRpc);
+    const worker = new Wallet(required("CREDITCOIN_WORKER_PRIVATE_KEY"), creditcoinRpc);
     const policyAdmin = new Wallet(required("CREDITCOIN_POLICY_ADMIN_PRIVATE_KEY"), creditcoinRpc);
     const guardian = new Wallet(required("CREDITCOIN_GUARDIAN_PRIVATE_KEY"), creditcoinRpc);
     const runtime = new Wallet(required("RUNTIME_PRIVATE_KEY"), creditcoinRpc);
@@ -288,6 +289,13 @@ async function main() {
         source: {
             chainId: sourceChainId,
             chainKey: sourceKey,
+            roles: {
+                deployer: await sourceDeployer.getAddress(),
+                publisher: await publisher.getAddress(),
+                evaluator: await evaluator.getAddress(),
+                approver: await approver.getAddress(),
+                statusAuthority: await statusAuthority.getAddress(),
+            },
             artifactRegistry: await artifactRegistry.getAddress(),
             evaluationRegistry: await evaluationRegistry.getAddress(),
             approvalRegistry: await approvalRegistry.getAddress(),
@@ -297,6 +305,13 @@ async function main() {
         creditcoin: {
             chainId: Number(creditcoinNetwork.chainId),
             blockProver: BLOCK_PROVER,
+            roles: {
+                deployer: await creditcoinDeployer.getAddress(),
+                worker: await worker.getAddress(),
+                policyAdmin: await policyAdmin.getAddress(),
+                guardian: await guardian.getAddress(),
+                runtime: await runtime.getAddress(),
+            },
             decoder: await decoder.getAddress(),
             evidence: await evidence.getAddress(),
             adapter: await adapter.getAddress(),

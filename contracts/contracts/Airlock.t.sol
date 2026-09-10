@@ -600,6 +600,14 @@ contract AirlockTest is Test {
         router.execute(intent, abi.encodePacked(r, s, v));
     }
 
+    function test_ValidatorsRejectInvalidConfiguration() public {
+        vm.expectRevert(AllowlistedStablecoinPaymentValidator.InvalidConfiguration.selector);
+        new AllowlistedStablecoinPaymentValidator(address(0), vendorRecipient, 1, MockStablecoin.transfer.selector);
+
+        vm.expectRevert(BoundedDepositValidator.InvalidConfiguration.selector);
+        new BoundedDepositValidator(address(0), 1, BoundedDepositProtocol.deposit.selector);
+    }
+
     function _importAllEvidence() internal {
         bytes32 artifactTx = keccak256("artifact-tx");
         bytes32 evaluationTx = keccak256("evaluation-tx");
