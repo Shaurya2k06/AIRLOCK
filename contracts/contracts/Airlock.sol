@@ -431,6 +431,7 @@ contract EvidenceRegistry is RoleAddress {
         uint64 issuedAt;
         uint64 validUntil;
         bool revoked;
+        bytes32 reasonHash;
         bytes32 evidenceId;
     }
 
@@ -506,6 +507,7 @@ contract EvidenceRegistry is RoleAddress {
     function recordRevocation(
         bytes32 orgId,
         bytes32 releaseDigest,
+        bytes32 reasonHash,
         uint64 statusNonce,
         uint64 revokedAt,
         bytes32 evidenceId
@@ -521,6 +523,7 @@ contract EvidenceRegistry is RoleAddress {
             issuedAt: revokedAt,
             validUntil: type(uint64).max,
             revoked: true,
+            reasonHash: reasonHash,
             evidenceId: evidenceId
         });
         emit EvidenceImported(5, evidenceId, key);
@@ -798,6 +801,7 @@ contract AirlockAttestcoinAdapter is RoleAddress {
                 issuedAt: issuedAt,
                 validUntil: validUntil,
                 revoked: false,
+                reasonHash: bytes32(0),
                 evidenceId: evidenceId
             })
         );
@@ -816,9 +820,10 @@ contract AirlockAttestcoinAdapter is RoleAddress {
         (uint64 statusNonce, uint64 revokedAt) = abi.decode(data, (uint64, uint64));
         bytes32 orgId = topics[1];
         bytes32 releaseDigest = topics[2];
+        bytes32 reasonHash = topics[3];
         if (statusNonce == 0) revert MalformedLog();
         evidenceId = _mark(REVOCATION, queryKey, releaseDigest);
-        evidence.recordRevocation(orgId, releaseDigest, statusNonce, revokedAt, evidenceId);
+        evidence.recordRevocation(orgId, releaseDigest, reasonHash, statusNonce, revokedAt, evidenceId);
         emit ProofImported(REVOCATION, queryKey, evidenceId);
     }
 

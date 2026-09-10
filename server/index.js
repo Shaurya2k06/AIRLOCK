@@ -33,7 +33,7 @@ const evidenceAbi = [
   'function getArtifact(bytes32) view returns (tuple(bool exists,bytes32 orgId,bytes32 releaseId,bytes32 releaseDigest,bytes32 manifestHash,bytes32 artifactRoot,bytes32 weightsHash,bytes32 tokenizerHash,bytes32 systemPromptHash,bytes32 toolManifestRoot,bytes32 containerImageDigest,bytes32 sbomHash,bytes32 provenanceHash,uint64 releaseVersion,uint64 publisherNonce,bytes32 evidenceId))',
   'function getEvaluation(bytes32) view returns (tuple(bool exists,bytes32 orgId,bytes32 releaseId,bytes32 releaseDigest,bytes32 suiteHash,bytes32 reportHash,bytes32 evaluatorSetHash,uint32 safetyScoreBps,uint256 deniedCapabilityBitmap,uint64 evaluatedAt,uint64 validUntil,uint64 evaluationNonce))',
   'function getApproval(bytes32) view returns (tuple(bool exists,bytes32 orgId,bytes32 agentId,bytes32 releaseDigest,address runtimeKey,bytes32 policyHash,bytes32 requestedScopeRoot,uint128 totalSpendCap,uint128 perCallValueCap,uint32 callCap,uint64 validAfter,uint64 validUntil,uint64 approvalNonce))',
-  'function getStatus(bytes32) view returns (tuple(bool exists,bytes32 orgId,bytes32 releaseDigest,uint8 status,uint64 statusNonce,uint64 issuedAt,uint64 validUntil,bool revoked,bytes32 evidenceId))',
+  'function getStatus(bytes32) view returns (tuple(bool exists,bytes32 orgId,bytes32 releaseDigest,uint8 status,uint64 statusNonce,uint64 issuedAt,uint64 validUntil,bool revoked,bytes32 reasonHash,bytes32 evidenceId))',
 ]
 const issuerAbi = [
   'function get(bytes32) view returns (tuple(bytes32 orgId,bytes32 agentId,bytes32 releaseDigest,bytes32 policyHash,bytes32 scopeRoot,address runtimeKey,uint128 spendCap,uint128 spent,uint128 perCallValueCap,uint32 callCap,uint32 callsUsed,uint64 notBefore,uint64 expiresAt,uint64 epoch,bool revoked))',
@@ -124,7 +124,7 @@ async function liveOverview(deployment) {
       { ...artifactProof, kind: 'Artifact', status: artifact.exists ? 'PROVEN' : 'PENDING', detail: short(artifact.manifestHash) },
       { ...evaluationProof, kind: 'Evaluation', status: evaluation.exists ? 'PROVEN' : 'PENDING', detail: `Safety suite · ${(Number(evaluation.safetyScoreBps) / 100).toFixed(2)}%` },
       { ...approvalProof, kind: 'Approval', status: approval.exists ? 'PROVEN' : 'PENDING', detail: `Runtime key · ${short(approval.runtimeKey)}` },
-      { ...statusProof, kind: 'Active status', status: status.exists ? (status.revoked ? 'REVOKED' : 'PROVEN') : 'PENDING', detail: `Checkpoint #${status.statusNonce}` },
+      { ...statusProof, kind: 'Active status', status: status.exists ? (status.revoked ? 'REVOKED' : 'PROVEN') : 'PENDING', detail: status.revoked ? `Revoked · ${short(status.reasonHash)}` : `Checkpoint #${status.statusNonce}` },
     ],
     capability,
     policy: { recipient, maxPayment: Number(formatEther(approval.perCallValueCap || 0n)) },

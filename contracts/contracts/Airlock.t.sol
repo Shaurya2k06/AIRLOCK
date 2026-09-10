@@ -469,6 +469,7 @@ contract AirlockTest is Test {
         bytes memory revokedSignature = _sign(validAfterRevocation);
         vm.expectRevert(CapabilityIssuer.PausedCapability.selector);
         router.execute(validAfterRevocation, revokedSignature);
+        assertEq(evidence.getStatus(evidence.releaseKey(orgId, releaseDigest)).reasonHash, keccak256("security"));
 
         bytes32 reactivationTx = keccak256("reactivation-after-revocation");
         _setReceipt(
