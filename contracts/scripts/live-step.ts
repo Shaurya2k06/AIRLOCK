@@ -97,6 +97,10 @@ async function main() {
 
     if (step === "revoke") {
         const sourceRpc = new JsonRpcProvider(required("SOURCE_CHAIN_RPC_URL"));
+        const sourceNetwork = await sourceRpc.getNetwork();
+        if (state.source.chainId && Number(sourceNetwork.chainId) !== Number(state.source.chainId)) {
+            throw new Error(`source RPC chain ${sourceNetwork.chainId} does not match deployment ${state.source.chainId}`);
+        }
         const statusAuthority = new Wallet(required("SOURCE_STATUS_PRIVATE_KEY"), sourceRpc);
         const status = new Contract(state.source.statusRegistry, statusAbi, statusAuthority);
         const transaction = await status.revoke(
@@ -115,6 +119,9 @@ async function main() {
 
     const creditcoinRpc = new JsonRpcProvider(required("CREDITCOIN_RPC_URL"));
     const network = await creditcoinRpc.getNetwork();
+    if (state.creditcoin.chainId && Number(network.chainId) !== Number(state.creditcoin.chainId)) {
+        throw new Error(`Creditcoin RPC chain ${network.chainId} does not match deployment ${state.creditcoin.chainId}`);
+    }
     const runtime = new Wallet(required("RUNTIME_PRIVATE_KEY"), creditcoinRpc);
     const worker = new Wallet(required("CREDITCOIN_WORKER_PRIVATE_KEY"), creditcoinRpc);
     const issuer = new Contract(state.creditcoin.issuer, issuerAbi, worker);
