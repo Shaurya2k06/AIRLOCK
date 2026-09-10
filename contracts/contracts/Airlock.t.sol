@@ -208,6 +208,19 @@ contract AirlockTest is Test {
         assertFalse(status.revoked);
     }
 
+    function test_IssuanceBindsReleaseIdAndEvaluationStart() public {
+        bytes32 mismatchedDigest = keccak256("mismatched-release-id");
+        _importEvidence(mismatchedDigest, keccak256("artifact-release"), keccak256("evaluation-release"), uint64(block.timestamp));
+        vm.expectRevert(CapabilityIssuer.Mismatch.selector);
+        issuer.issue(orgId, agentId, mismatchedDigest, policyHash);
+
+        bytes32 futureDigest = keccak256("future-evaluation");
+        bytes32 futureReleaseId = keccak256("future-release");
+        _importEvidence(futureDigest, futureReleaseId, futureReleaseId, uint64(block.timestamp + 1));
+        vm.expectRevert(CapabilityIssuer.InvalidWindow.selector);
+        issuer.issue(orgId, agentId, futureDigest, policyHash);
+    }
+
     function test_AdapterRejectsMalformedReceiptsBeforeEvidenceMutation() public {
         bytes32 malformedArtifactTx = keccak256("malformed-artifact-tx");
         bytes32 malformedOrg = keccak256("malformed-org");
@@ -424,6 +437,87 @@ contract AirlockTest is Test {
         router.execute(replay, replaySignature);
     }
 
+    function test_RouterRejectsIntentIntegrityAndBounds() public {
+        bytes memory paymentData = abi.encodeWithSelector(
+            MockStablecoin.transfer.selector,
+            vendorRecipient,
+            uint256(0.1 ether)
+        );
+
+        ToolRouter.ToolIntent memory mutated = _intent(
+            paymentLeaf,
+            address(stablecoin),
+            MockStablecoin.transfer.selector,
+            paymentData,
+            0,
+            0,
+            keccak256("mutated-calldata")
+        );
+        bytes memory signature = _sign(mutated);
+        mutated.data = abi.encodeWithSelector(MockStablecoin.transfer.selector, vendorRecipient, uint256(0.11 ether));
+        vm.expectRevert(ToolRouter.InvalidIntent.selector);
+        router.execute(mutated, signature);
+
+        ToolRouter.ToolIntent memory wrongTarget = _intent(
+            paymentLeaf,
+            address(protocol),
+            MockStablecoin.transfer.selector,
+            paymentData,
+            0,
+            0,
+            keccak256("wrong-target")
+        );
+        bytes memory wrongTargetSignature = _sign(wrongTarget);
+        vm.expectRevert(ToolRouter.UnsupportedAction.selector);
+        router.execute(wrongTarget, wrongTargetSignature);
+
+        ToolRouter.ToolIntent memory expired = _intent(
+            paymentLeaf,
+            address(stablecoin),
+            MockStablecoin.transfer.selector,
+            paymentData,
+            0,
+            0,
+            keccak256("expired")
+        );
+        expired.deadline = uint64(block.timestamp - 1);
+        bytes memory expiredSignature = _sign(expired);
+        vm.expectRevert(ToolRouter.Expired.selector);
+        router.execute(expired, expiredSignature);
+
+        bytes memory depositData = abi.encodeWithSelector(
+            BoundedDepositProtocol.deposit.selector,
+            keccak256("invalid-deposit")
+        );
+        ToolRouter.ToolIntent memory invalidDeposit = _intent(
+            depositLeaf,
+            address(protocol),
+            BoundedDepositProtocol.deposit.selector,
+            depositData,
+            0,
+            0,
+            keccak256("invalid-deposit")
+        );
+        bytes memory invalidDepositSignature = _sign(invalidDeposit);
+        vm.expectRevert(BoundedDepositValidator.InvalidDeposit.selector);
+        router.execute(invalidDeposit, invalidDepositSignature);
+
+        ToolRouter.ToolIntent memory allowed = _intent(
+            paymentLeaf,
+            address(stablecoin),
+            MockStablecoin.transfer.selector,
+            paymentData,
+            0,
+            0,
+            keccak256("idempotency")
+        );
+        router.execute(allowed, _sign(allowed));
+        allowed.actionNonce = 1;
+        bytes memory replaySignature = _sign(allowed);
+        vm.expectRevert(ToolRouter.Replay.selector);
+        router.execute(allowed, replaySignature);
+    }
+
     function testFuzz_StablecoinPaymentChargesExactAmount(uint128 rawAmount) public {
         uint256 amount = bound(uint256(rawAmount), 1, 0.25 ether);
         bytes memory data = abi.encodeWithSelector(MockStablecoin.transfer.selector, vendorRecipient, amount);
@@ -609,10 +703,19 @@ contract AirlockTest is Test {
     }
 
     function _importAllEvidence() internal {
-        bytes32 artifactTx = keccak256("artifact-tx");
-        bytes32 evaluationTx = keccak256("evaluation-tx");
-        bytes32 approvalTx = keccak256("approval-tx");
-        bytes32 statusTx = keccak256("status-tx");
+        _importEvidence(releaseDigest, releaseId, releaseId, uint64(block.timestamp));
+    }
+
+    function _importEvidence(
+        bytes32 digest,
+        bytes32 artifactReleaseId,
+        bytes32 evaluationReleaseId,
+        uint64 evaluatedAt
+    ) internal {
+        bytes32 artifactTx = keccak256(abi.encode("artifact-tx", digest));
+        bytes32 evaluationTx = keccak256(abi.encode("evaluation-tx", digest));
+        bytes32 approvalTx = keccak256(abi.encode("approval-tx", digest));
+        bytes32 statusTx = keccak256(abi.encode("status-tx", digest));
 
         bytes32 artifactRoot = keccak256("artifact-root");
         bytes memory artifactData = abi.encode(
@@ -631,7 +734,7 @@ contract AirlockTest is Test {
         _setReceipt(
             artifactTx,
             address(artifactRegistry),
-            _topics(adapter.ARTIFACT_TOPIC(), orgId, releaseId, releaseDigest),
+            _topics(adapter.ARTIFACT_TOPIC(), orgId, artifactReleaseId, digest),
             artifactData
         );
         adapter.importArtifact(_request(artifactTx, 0));
@@ -642,14 +745,14 @@ contract AirlockTest is Test {
             evaluatorSetHash,
             uint32(9_000),
             uint256(0),
-            uint64(block.timestamp),
+            evaluatedAt,
             uint64(block.timestamp + 1 days),
             uint64(1)
         );
         _setReceipt(
             evaluationTx,
             address(evaluationRegistry),
-            _topics(adapter.EVALUATION_TOPIC(), orgId, releaseId, releaseDigest),
+            _topics(adapter.EVALUATION_TOPIC(), orgId, evaluationReleaseId, digest),
             evaluationData
         );
         adapter.importEvaluation(_request(evaluationTx, 0));
@@ -668,7 +771,7 @@ contract AirlockTest is Test {
         _setReceipt(
             approvalTx,
             address(approvalRegistry),
-            _topics(adapter.APPROVAL_TOPIC(), orgId, agentId, releaseDigest),
+            _topics(adapter.APPROVAL_TOPIC(), orgId, agentId, digest),
             approvalData
         );
         adapter.importApproval(_request(approvalTx, 0));
@@ -677,7 +780,7 @@ contract AirlockTest is Test {
         _setReceipt(
             statusTx,
             address(statusRegistry),
-            _topics(adapter.STATUS_TOPIC(), orgId, releaseDigest, bytes32(uint256(1))),
+            _topics(adapter.STATUS_TOPIC(), orgId, digest, bytes32(uint256(1))),
             statusData
         );
         adapter.importStatus(_request(statusTx, 0));
