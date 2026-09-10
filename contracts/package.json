@@ -8,12 +8,14 @@
     "typecheck": "tsc --noEmit",
     "manifest": "node scripts/manifest.mjs",
     "manifest:test": "node --test scripts/manifest.test.mjs",
+    "abi:check": "node scripts/abi-check.mjs",
+    "security:check": "node scripts/secret-check.mjs",
     "live:check": "hardhat run scripts/live-check.ts",
     "deploy-live": "hardhat run scripts/deploy-live.ts",
     "import-proof": "hardhat run scripts/import-proof.ts",
     "worker": "hardhat run scripts/worker.ts",
     "live-step": "hardhat run scripts/live-step.ts",
-    "ci": "npm run build && npm run typecheck && npm run manifest:test && npm test"
+    "ci": "npm run build && npm run typecheck && npm run manifest:test && npm run abi:check && npm run security:check && npm test"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-ethers": "^4.0.15",

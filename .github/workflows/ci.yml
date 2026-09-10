@@ -18,6 +18,7 @@ jobs:
           cache: npm
           cache-dependency-path: contracts/package-lock.json
       - run: npm ci
+      - run: npm audit --audit-level=high --omit=dev
       - run: npm run ci
       - run: npx hardhat build --build-profile production
 
@@ -34,6 +35,7 @@ jobs:
           cache: npm
           cache-dependency-path: server/package-lock.json
       - run: npm ci
+      - run: npm audit --audit-level=high --omit=dev
       - run: npm test
 
   client:
@@ -49,5 +51,6 @@ jobs:
           cache: npm
           cache-dependency-path: client/package-lock.json
       - run: npm ci
+      - run: npm audit --audit-level=high --omit=dev
       - run: npm run build
       - run: npm run lint
