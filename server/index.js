@@ -110,6 +110,13 @@ async function liveOverview(deployment) {
   const evaluationProof = proof('evaluation')
   const approvalProof = proof('approval')
   const statusProof = proof('status')
+  const actions = []
+  if (deployment.live?.allowedActionTx) {
+    actions.push({ action: 'vendor.pay', target: short(recipient), amount: Number(formatEther(BigInt(deployment.release.paymentAmount))), state: 'Allowed', age: short(deployment.live.allowedActionTx) })
+  }
+  if (deployment.live?.depositActionTx) {
+    actions.push({ action: 'protocol.deposit', target: short(deployment.creditcoin.protocol), amount: Number(formatEther(BigInt(deployment.release.depositAmount || '100000000000000000'))), state: 'Allowed', age: short(deployment.live.depositActionTx) })
+  }
   return {
     mode: 'live',
     dataSource: 'creditcoin-chain',
@@ -135,9 +142,7 @@ async function liveOverview(deployment) {
       maxPayment: Number(formatEther(approval.perCallValueCap || 0n)),
       depositMax: Number(formatEther(BigInt(deployment.release.depositAmount || '100000000000000000'))),
     },
-    actions: deployment.live?.allowedActionTx
-      ? [{ action: 'vendor.pay', target: short(recipient), amount: Number(formatEther(deployment.release.paymentAmount)), state: 'Allowed', age: short(deployment.live.allowedActionTx) }]
-      : [],
+    actions,
   }
 }
 
