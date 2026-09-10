@@ -3,6 +3,8 @@
 The server serves a labelled local fixture when no deployment/RPC is
 configured. With `deployments.json` and `CREDITCOIN_RPC_URL`, it reads evidence
 and capability state from Creditcoin and returns `dataSource: creditcoin-chain`.
+RPC failures are returned as `dataSource: rpc-error`; the client must not treat
+that state as a fixture or authorization decision.
 
 ```sh
 npm test
