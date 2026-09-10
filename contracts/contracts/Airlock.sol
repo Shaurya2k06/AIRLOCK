@@ -931,6 +931,7 @@ contract PolicyRegistry is RoleAddress {
 
     address public immutable guardian;
     mapping(bytes32 => Policy) private _policies;
+    bytes32 public constant POLICY_DOMAIN = keccak256("AIRLOCK_POLICY_V1");
 
     event PolicyRegistered(bytes32 indexed policyHash);
     event PolicyPaused(bytes32 indexed policyHash, bool paused);
@@ -943,6 +944,7 @@ contract PolicyRegistry is RoleAddress {
     function hashPolicy(PolicyInput calldata value) public pure returns (bytes32) {
         return keccak256(
             abi.encode(
+                POLICY_DOMAIN,
                 value.approvedSuiteHash,
                 value.approvedEvaluatorSetHash,
                 value.allowedToolScopeRoot,

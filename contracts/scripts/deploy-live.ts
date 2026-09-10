@@ -188,26 +188,10 @@ async function main() {
         statusFreshness: 3_600,
         teeRequired: false,
     };
-    const policyHash = keccak256(abi.encode(
-        ["bytes32", "bytes32", "bytes32", "uint32", "uint256", "uint128", "uint128", "uint32", "uint64", "uint64", "bool"],
-        [
-            policyInput.approvedSuiteHash,
-            policyInput.approvedEvaluatorSetHash,
-            policyInput.allowedToolScopeRoot,
-            policyInput.minSafetyScoreBps,
-            policyInput.deniedCapabilityBitmap,
-            policyInput.spendCeiling,
-            policyInput.perCallCeiling,
-            policyInput.callCeiling,
-            policyInput.capabilityTtl,
-            policyInput.statusFreshness,
-            policyInput.teeRequired,
-        ],
-    ));
-
     const evidence = await deploy("EvidenceRegistry", creditcoinDeployer, await policyAdmin.getAddress());
     const decoder = await deploy("OfficialReceiptDecoder", creditcoinDeployer);
     const policies = await deploy("PolicyRegistry", creditcoinDeployer, await policyAdmin.getAddress(), await guardian.getAddress());
+    const policyHash = await (policies as any).hashPolicy(policyInput);
     const issuer = await deploy(
         "CapabilityIssuer",
         creditcoinDeployer,
