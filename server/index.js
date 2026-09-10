@@ -186,7 +186,8 @@ const server = http.createServer(async (request, response) => {
   if (request.method === 'GET' && url.pathname === '/health') {
     try {
       const deployment = await readDeployment()
-      json(response, 200, { ok: true, service: 'airlock-control-plane', dataSource: deployment && process.env.CREDITCOIN_RPC_URL ? 'creditcoin-chain' : 'local-fixture' })
+      const dataSource = !process.env.CREDITCOIN_RPC_URL ? 'local-fixture' : deployment ? 'creditcoin-chain' : 'rpc-error'
+      json(response, dataSource === 'rpc-error' ? 503 : 200, { ok: dataSource !== 'rpc-error', service: 'airlock-control-plane', dataSource })
     } catch (error) {
       json(response, 503, { ok: false, service: 'airlock-control-plane', dataSource: 'rpc-error', error: error.message })
     }

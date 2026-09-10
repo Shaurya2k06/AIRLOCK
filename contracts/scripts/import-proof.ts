@@ -148,6 +148,7 @@ async function main() {
     };
     const transaction = await adapter[methods[kind]](request);
     const receipt = await transaction.wait();
+    if (receipt?.status !== 1) throw new Error(`Creditcoin import transaction failed: ${transaction.hash}`);
     const sourceLog = sourceReceipt.logs[logIndex];
 
     const proofRecord = {
