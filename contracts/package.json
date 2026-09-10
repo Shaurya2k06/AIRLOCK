@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit",
     "manifest": "node scripts/manifest.mjs",
     "manifest:test": "node --test scripts/manifest.test.mjs",
+    "live:check": "hardhat run scripts/live-check.ts",
     "deploy-live": "hardhat run scripts/deploy-live.ts",
     "import-proof": "hardhat run scripts/import-proof.ts",
     "worker": "hardhat run scripts/worker.ts",

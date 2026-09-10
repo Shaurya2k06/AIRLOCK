@@ -18,7 +18,7 @@ live Attestcoin gate.
 1. Copy `contracts/.env.example` to `contracts/.env` and use separate,
    low-value funded keys for publisher, evaluator, approver, status authority,
    deployer, gas-only worker, guardian, policy admin, and runtime signer.
-2. Run `npm run deploy-live` from `contracts`.
+2. Run `npm run live:check`, then `npm run deploy-live` from `contracts`.
 3. Import the four publication/evaluation/approval/status proofs with
    `IMPORT_KIND=... npm run import-proof`.
 4. Run `LIVE_STEP=execute npm run live-step`; retain the capability and allowed

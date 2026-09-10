@@ -34,6 +34,7 @@ validators, vault containment, budgets, idempotency, and proven revocation.
 
 ```sh
 cp .env.example .env
+npm run live:check
 npm run deploy-live
 IMPORT_KIND=artifact npm run import-proof
 IMPORT_KIND=evaluation npm run import-proof

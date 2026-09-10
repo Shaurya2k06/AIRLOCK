@@ -43,6 +43,8 @@ action; `LIVE_STEP=revoke`, a revocation proof import, and
 
 Copy `contracts/.env.example` to `contracts/.env` only when running the real
 Sepolia → Creditcoin flow. Private keys stay local and are never committed.
+Run `npm run live:check` before deployment; it performs read-only validation
+and sends no transactions.
 Live deployments are written to `deployments.json`; generated addresses are
 not configuration inputs.
 
