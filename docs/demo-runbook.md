@@ -25,7 +25,8 @@ live Attestcoin gate.
    payment transaction hashes.
 5. Run `LIVE_STEP=deposit npm run live-step`; retain the bounded deposit
    transaction hash.
-6. Run `LIVE_STEP=revoke npm run live-step`.
+6. Run `LIVE_STEP=revoke npm run live-step`; this prepares the bounded blocked
+   intent before publishing the source revocation.
 7. Import the revocation proof.
 8. Run `LIVE_STEP=blocked npm run live-step`; the router simulation must revert.
 

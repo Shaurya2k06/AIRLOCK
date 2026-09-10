@@ -126,7 +126,7 @@ async function main() {
         ? await proposedPayment(state)
         : { recipient: state.release.paymentRecipient, amount: state.release.paymentAmount };
 
-    if (step === "execute" || step === "deposit") {
+    if (step !== "blocked") {
         const manifest = await verifyManifest(
             resolve(process.cwd(), process.env.MANIFEST_FILE?.trim() || "../airlock-manifest.json"),
             resolve(process.cwd(), process.env.RELEASE_DIR?.trim() || "../fixtures/releases/demo"),
@@ -136,7 +136,42 @@ async function main() {
         }
     }
 
+    const creditcoinRpc = new JsonRpcProvider(required("CREDITCOIN_RPC_URL"));
+    const network = await creditcoinRpc.getNetwork();
+    if (state.creditcoin.chainId && Number(network.chainId) !== Number(state.creditcoin.chainId)) {
+        throw new Error(`Creditcoin RPC chain ${network.chainId} does not match deployment ${state.creditcoin.chainId}`);
+    }
+    const runtime = new Wallet(required("RUNTIME_PRIVATE_KEY"), creditcoinRpc);
+    const worker = new Wallet(required("CREDITCOIN_WORKER_PRIVATE_KEY"), creditcoinRpc);
+    const issuer = new Contract(state.creditcoin.issuer, issuerAbi, worker);
+    const router = new Contract(state.creditcoin.router, routerAbi, worker);
+    const data = new Interface(["function transfer(address recipient,uint256 amount)"]).encodeFunctionData("transfer", [
+        proposal.recipient,
+        proposal.amount,
+    ]);
+
     if (step === "revoke") {
+        if (!state.live?.capabilityId) throw new Error("Run LIVE_STEP=execute first");
+        const evidence = new Contract(state.creditcoin.evidence, evidenceAbi, creditcoinRpc);
+        const releaseKey = await evidence.releaseKey(state.release.orgId, state.release.releaseDigest);
+        const currentStatus = await evidence.getStatus(releaseKey);
+        if (!currentStatus.exists || currentStatus.revoked || Number(currentStatus.status) !== 1) {
+            throw new Error("an active imported status is required before preparing revocation");
+        }
+        await assertCapabilityBinding(issuer, state.live.capabilityId, state, runtime);
+        const actionNonce = Number(await router.nextNonce(state.live.capabilityId));
+        const intent = paymentIntent(data, state, state.live.capabilityId, actionNonce);
+        const signature = await runtime.signTypedData(
+            {
+                name: "AIRLOCK Tool Router",
+                version: "1",
+                chainId: network.chainId,
+                verifyingContract: state.creditcoin.router,
+            },
+            intentTypes,
+            intent,
+        );
+
         const sourceRpc = new JsonRpcProvider(required("SOURCE_CHAIN_RPC_URL"));
         const sourceNetwork = await sourceRpc.getNetwork();
         if (state.source.chainId && Number(sourceNetwork.chainId) !== Number(state.source.chainId)) {
@@ -153,24 +188,17 @@ async function main() {
         );
         await transaction.wait();
         state.source.transactions.revocationTx = transaction.hash;
+        state.live.blockedAction = {
+            actionNonce,
+            deadline: intent.deadline.toString(),
+            idempotencyKey: intent.idempotencyKey,
+            data: intent.data,
+            signature,
+        };
         await save(state);
-        console.log(JSON.stringify({ revocationTx: transaction.hash }, null, 2));
+        console.log(JSON.stringify({ revocationTx: transaction.hash, blockedActionNonce: actionNonce }, null, 2));
         return;
     }
-
-    const creditcoinRpc = new JsonRpcProvider(required("CREDITCOIN_RPC_URL"));
-    const network = await creditcoinRpc.getNetwork();
-    if (state.creditcoin.chainId && Number(network.chainId) !== Number(state.creditcoin.chainId)) {
-        throw new Error(`Creditcoin RPC chain ${network.chainId} does not match deployment ${state.creditcoin.chainId}`);
-    }
-    const runtime = new Wallet(required("RUNTIME_PRIVATE_KEY"), creditcoinRpc);
-    const worker = new Wallet(required("CREDITCOIN_WORKER_PRIVATE_KEY"), creditcoinRpc);
-    const issuer = new Contract(state.creditcoin.issuer, issuerAbi, worker);
-    const router = new Contract(state.creditcoin.router, routerAbi, worker);
-    const data = new Interface(["function transfer(address recipient,uint256 amount)"]).encodeFunctionData("transfer", [
-        proposal.recipient,
-        proposal.amount,
-    ]);
 
     if (step === "execute") {
         if (getAddress(state.release.runtimeKey) !== getAddress(await runtime.getAddress())) {
@@ -242,18 +270,12 @@ async function main() {
     if (!status.revoked || Number(status.status) !== 2) {
         throw new Error("import the proven revocation before LIVE_STEP=blocked");
     }
-    const actionNonce = Number(await router.nextNonce(state.live.capabilityId));
-    const intent = paymentIntent(data, state, state.live.capabilityId, actionNonce);
-    const signature = await runtime.signTypedData(
-        {
-            name: "AIRLOCK Tool Router",
-            version: "1",
-            chainId: network.chainId,
-            verifyingContract: state.creditcoin.router,
-        },
-        intentTypes,
-        intent,
-    );
+    const blockedAction = state.live.blockedAction;
+    if (!blockedAction) throw new Error("Run LIVE_STEP=revoke first");
+    const intent = paymentIntent(blockedAction.data, state, state.live.capabilityId, Number(blockedAction.actionNonce));
+    intent.deadline = BigInt(blockedAction.deadline);
+    intent.idempotencyKey = blockedAction.idempotencyKey;
+    const signature = blockedAction.signature;
     try {
         await router.execute.staticCall(intent, signature);
         throw new Error("revoked capability still passed the router simulation");
