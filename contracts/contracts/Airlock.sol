@@ -1146,6 +1146,8 @@ contract CapabilityIssuer is RoleAddress {
                 || agentPaused[current.agentId]
                 || runtimePaused[current.runtimeKey]
         ) revert PausedCapability();
+        PolicyRegistry.Policy memory policy = policies.get(current.policyHash);
+        if (!policy.exists || policy.paused) revert PausedCapability();
         EvidenceRegistry.StatusEvidence memory currentStatus = evidence.getStatus(
             evidence.releaseKey(current.orgId, current.releaseDigest)
         );

@@ -3,7 +3,7 @@ import "dotenv/config";
 import { stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { chainInfo } from "@gluwa/usc-sdk";
-import { formatEther, getAddress, JsonRpcProvider, parseEther, Wallet } from "ethers";
+import { formatEther, getAddress, JsonRpcProvider, parseEther, Wallet, ZeroAddress } from "ethers";
 
 const requiredNames = [
     "SOURCE_CHAIN_RPC_URL",
@@ -101,6 +101,7 @@ async function main(): Promise<void> {
     if (!/^https?:$/.test(proofBuilderUrl.protocol)) throw new Error("CREDITCOIN_PROOF_BUILDER_URL must use http or https");
 
     const recipient = getAddress(value("PAYMENT_RECIPIENT") as string);
+    if (recipient === ZeroAddress) throw new Error("PAYMENT_RECIPIENT must not be the zero address");
     const paymentAmount = parseEther(value("PAYMENT_AMOUNT") as string);
     if (paymentAmount <= 0n) throw new Error("PAYMENT_AMOUNT must be greater than zero");
     for (const name of ["ORG_ID", "RELEASE_ID", "AGENT_ID"]) {

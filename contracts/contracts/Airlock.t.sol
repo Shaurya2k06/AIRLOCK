@@ -544,6 +544,29 @@ contract AirlockTest is Test {
         assertEq(stablecoin.balanceOf(vendorRecipient), 0.1 ether);
     }
 
+    function test_PolicyPauseReducesExistingCapability() public {
+        bytes memory data = abi.encodeWithSelector(MockStablecoin.transfer.selector, vendorRecipient, uint256(0.1 ether));
+        ToolRouter.ToolIntent memory intent = _intent(
+            paymentLeaf,
+            address(stablecoin),
+            MockStablecoin.transfer.selector,
+            data,
+            0,
+            0,
+            keccak256("policy-pause")
+        );
+        bytes memory signature = _sign(intent);
+        vm.prank(guardian);
+        policies.pause(policyHash);
+        vm.expectRevert(CapabilityIssuer.PausedCapability.selector);
+        router.execute(intent, signature);
+
+        vm.prank(admin);
+        policies.unpause(policyHash);
+        router.execute(intent, signature);
+        assertEq(stablecoin.balanceOf(vendorRecipient), 0.1 ether);
+    }
+
     function test_AdapterGuardianPauseRequiresAdminToUnpause() public {
         vm.prank(guardian);
         adapter.pause();

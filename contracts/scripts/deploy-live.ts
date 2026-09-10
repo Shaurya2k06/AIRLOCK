@@ -13,6 +13,7 @@ import {
     parseEther,
     Wallet,
     getAddress,
+    ZeroAddress,
 } from "ethers";
 import { chainInfo } from "@gluwa/usc-sdk";
 // @ts-expect-error The manifest CLI is intentionally plain ESM for direct Node execution.
@@ -113,6 +114,8 @@ async function main() {
     const agentId = bytes32(required("AGENT_ID"), "AGENT_ID");
     const recipient = getAddress(required("PAYMENT_RECIPIENT"));
     const paymentAmount = parseEther(required("PAYMENT_AMOUNT"));
+    if (recipient === ZeroAddress) throw new Error("PAYMENT_RECIPIENT must not be the zero address");
+    if (paymentAmount <= 0n) throw new Error("PAYMENT_AMOUNT must be greater than zero");
     const depositTarget = bytes32(process.env.DEPOSIT_TARGET?.trim() || "airlock-demo-position", "DEPOSIT_TARGET");
     const releaseDirectory = resolve(process.cwd(), process.env.RELEASE_DIR?.trim() || "../fixtures/releases/demo");
     const paymentSelector = selector("transfer(address,uint256)");
