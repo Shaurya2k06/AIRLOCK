@@ -29,6 +29,8 @@ EVM V1 decoder, while the adapter calls Creditcoin's native BlockProver ABI.
 The test covers separate source roles, proof and replay checks, deterministic
 issuance, EIP-712 intents, scope proofs, mock-stablecoin and deposit
 validators, vault containment, budgets, idempotency, and proven revocation.
+The suite also runs a bounded stablecoin accounting fuzz test and a capability
+spend/call invariant.
 
 ## Live testnet path
 

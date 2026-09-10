@@ -414,6 +414,31 @@ contract AirlockTest is Test {
         router.execute(replay, replaySignature);
     }
 
+    function testFuzz_StablecoinPaymentChargesExactAmount(uint128 rawAmount) public {
+        uint256 amount = bound(uint256(rawAmount), 1, 0.25 ether);
+        bytes memory data = abi.encodeWithSelector(MockStablecoin.transfer.selector, vendorRecipient, amount);
+        ToolRouter.ToolIntent memory intent = _intent(
+            paymentLeaf,
+            address(stablecoin),
+            MockStablecoin.transfer.selector,
+            data,
+            0,
+            0,
+            keccak256("fuzz-payment")
+        );
+
+        router.execute(intent, _sign(intent));
+
+        assertEq(stablecoin.balanceOf(vendorRecipient), amount);
+        assertEq(issuer.get(capabilityId).spent, amount);
+    }
+
+    function invariant_CapabilityAccountingNeverExceedsCaps() public view {
+        CapabilityIssuer.Capability memory current = issuer.get(capabilityId);
+        assertLe(current.spent, current.spendCap);
+        assertLe(current.callsUsed, current.callCap);
+    }
+
     function test_RejectedActionsAndProvenRevocation() public {
         bytes memory wrongRecipientData = abi.encodeWithSelector(
             MockStablecoin.transfer.selector,

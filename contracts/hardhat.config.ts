@@ -3,6 +3,12 @@ import { configVariable, defineConfig } from "hardhat/config";
 
 export default defineConfig({
   plugins: [hardhatToolboxMochaEthersPlugin],
+  test: {
+    solidity: {
+      fuzz: { runs: 32 },
+      invariant: { runs: 16, depth: 16 },
+    },
+  },
   solidity: {
     profiles: {
       default: {
