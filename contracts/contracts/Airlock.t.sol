@@ -236,6 +236,16 @@ contract AirlockTest is Test {
         adapter.importStatus(_request(invalidStatusTx, 0));
         assertFalse(evidence.getStatus(evidence.releaseKey(invalidStatusOrg, invalidStatusDigest)).exists);
 
+        bytes32 nonCanonicalStatusTx = keccak256("non-canonical-status-tx");
+        _setReceipt(
+            nonCanonicalStatusTx,
+            address(statusRegistry),
+            _topics(adapter.STATUS_TOPIC(), invalidStatusOrg, invalidStatusDigest, bytes32(uint256(257))),
+            abi.encode(uint64(1), uint64(block.timestamp), uint64(block.timestamp + 1 days))
+        );
+        vm.expectRevert(AirlockAttestcoinAdapter.InvalidStatus.selector);
+        adapter.importStatus(_request(nonCanonicalStatusTx, 0));
+
         bytes32 failedTx = keccak256("failed-source-receipt");
         _setReceiptStatus(
             failedTx,

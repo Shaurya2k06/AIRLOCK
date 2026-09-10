@@ -788,7 +788,9 @@ contract AirlockAttestcoinAdapter is RoleAddress {
         (uint64 statusNonce, uint64 issuedAt, uint64 validUntil) = abi.decode(data, (uint64, uint64, uint64));
         bytes32 orgId = topics[1];
         bytes32 releaseDigest = topics[2];
-        uint8 status = uint8(uint256(topics[3]));
+        uint256 rawStatus = uint256(topics[3]);
+        if (rawStatus > type(uint8).max) revert InvalidStatus();
+        uint8 status = uint8(rawStatus);
         if (status != 1 || statusNonce == 0 || validUntil <= issuedAt) revert InvalidStatus();
         evidenceId = _mark(STATUS, queryKey, releaseDigest);
         evidence.recordStatus(
