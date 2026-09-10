@@ -197,7 +197,7 @@ const server = http.createServer(async (request, response) => {
     try {
       json(response, 200, await overview())
     } catch (error) {
-      json(response, 503, { ...fixtureState, mode: 'live-error', dataSource: 'rpc-error', error: error.message })
+      json(response, 503, { mode: 'live-error', dataSource: 'rpc-error', error: error.message })
     }
     return
   }
