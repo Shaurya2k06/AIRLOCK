@@ -23,9 +23,11 @@ live Attestcoin gate.
    `IMPORT_KIND=... npm run import-proof`.
 4. Run `LIVE_STEP=execute npm run live-step`; retain the capability and allowed
    payment transaction hashes.
-5. Run `LIVE_STEP=revoke npm run live-step`.
-6. Import the revocation proof.
-7. Run `LIVE_STEP=blocked npm run live-step`; the router simulation must revert.
+5. Run `LIVE_STEP=deposit npm run live-step`; retain the bounded deposit
+   transaction hash.
+6. Run `LIVE_STEP=revoke npm run live-step`.
+7. Import the revocation proof.
+8. Run `LIVE_STEP=blocked npm run live-step`; the router simulation must revert.
 
 The same sequence can be driven by `WORKER_ONCE=true npm run worker` for a
 single source scan, or `npm run worker` for polling/retry behavior.

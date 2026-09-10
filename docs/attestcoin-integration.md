@@ -50,6 +50,7 @@ IMPORT_KIND=approval npm run import-proof
 IMPORT_KIND=status npm run import-proof
 
 LIVE_STEP=execute npm run live-step
+LIVE_STEP=deposit npm run live-step
 LIVE_STEP=revoke npm run live-step
 IMPORT_KIND=revocation npm run import-proof
 LIVE_STEP=blocked npm run live-step

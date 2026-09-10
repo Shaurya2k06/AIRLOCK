@@ -143,6 +143,7 @@ async function main() {
         "BoundedDepositValidator",
         creditcoinDeployer,
         await protocol.getAddress(),
+        depositTarget,
         parseEther("0.1"),
         depositSelector,
     );
@@ -175,7 +176,7 @@ async function main() {
     const evaluatorSetHash = id("AIRLOCK_EVALUATORS_V1");
     const depositAmount = parseEther("0.1");
     const spendCeiling = paymentAmount + depositAmount;
-    const perCallCeiling = paymentAmount;
+    const perCallCeiling = paymentAmount > depositAmount ? paymentAmount : depositAmount;
     const policyInput = {
         approvedSuiteHash: suiteHash,
         approvedEvaluatorSetHash: evaluatorSetHash,
@@ -341,6 +342,7 @@ async function main() {
             paymentRecipient: recipient,
             paymentAmount: paymentAmount.toString(),
             depositTarget,
+            depositAmount: depositAmount.toString(),
         },
     };
     await writeFile(resolve(process.cwd(), "../deployments.json"), `${JSON.stringify(deployment, null, 2)}\n`);

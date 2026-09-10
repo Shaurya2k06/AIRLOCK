@@ -12,6 +12,11 @@ const issuerAbi = [
 ];
 const routerAbi = [
     "function execute((bytes32 capabilityId,bytes32 agentId,address target,bytes4 functionSelector,bytes32 calldataHash,uint256 value,uint64 deadline,uint64 actionNonce,bytes32 idempotencyKey,bytes32 scopeLeaf,bytes32[] scopeProof,bytes data) intent,bytes signature) returns (bytes)",
+    "function nextNonce(bytes32) view returns (uint64)",
+];
+const evidenceAbi = [
+    "function releaseKey(bytes32,bytes32) view returns (bytes32)",
+    "function getStatus(bytes32) view returns (tuple(bool exists,bytes32 orgId,bytes32 releaseDigest,uint8 status,uint64 statusNonce,uint64 issuedAt,uint64 validUntil,bool revoked,bytes32 reasonHash,bytes32 evidenceId))",
 ];
 const statusAbi = [
     "function revoke(bytes32 orgId,bytes32 releaseDigest,bytes32 reasonHash,uint64 statusNonce,uint64 revokedAt)",
@@ -55,9 +60,29 @@ function paymentIntent(data: string, deploymentState: any, capabilityId: string,
         value: 0n,
         deadline: BigInt(Math.floor(Date.now() / 1000) + 300),
         actionNonce,
-        idempotencyKey: id(`AIRLOCK_LIVE_ACTION:${actionNonce}`),
+        idempotencyKey: id(`AIRLOCK_LIVE_ACTION:${capabilityId}:${actionNonce}`),
         scopeLeaf: deploymentState.release.paymentLeaf,
         scopeProof: [deploymentState.release.depositLeaf],
+        data,
+    };
+}
+
+function depositIntent(deploymentState: any, capabilityId: string, actionNonce: number) {
+    const data = new Interface(["function deposit(bytes32 position)"]).encodeFunctionData("deposit", [
+        deploymentState.release.depositTarget,
+    ]);
+    return {
+        capabilityId,
+        agentId: deploymentState.release.agentId,
+        target: deploymentState.creditcoin.protocol,
+        functionSelector: id("deposit(bytes32)").slice(0, 10),
+        calldataHash: keccak256(data),
+        value: BigInt(deploymentState.release.depositAmount || parseEther("0.1")),
+        deadline: BigInt(Math.floor(Date.now() / 1000) + 300),
+        actionNonce,
+        idempotencyKey: id(`AIRLOCK_LIVE_DEPOSIT:${capabilityId}:${actionNonce}`),
+        scopeLeaf: deploymentState.release.depositLeaf,
+        scopeProof: [deploymentState.release.paymentLeaf],
         data,
     };
 }
@@ -93,15 +118,15 @@ async function assertCapabilityBinding(issuer: Contract, capabilityId: string, s
 
 async function main() {
     const step = process.env.LIVE_STEP?.trim();
-    if (!step || !["execute", "revoke", "blocked"].includes(step)) {
-        throw new Error("Set LIVE_STEP=execute, revoke, or blocked");
+    if (!step || !["execute", "deposit", "revoke", "blocked"].includes(step)) {
+        throw new Error("Set LIVE_STEP=execute, deposit, revoke, or blocked");
     }
     const state = await deployment();
     const proposal = step === "execute"
         ? await proposedPayment(state)
         : { recipient: state.release.paymentRecipient, amount: state.release.paymentAmount };
 
-    if (step === "execute") {
+    if (step === "execute" || step === "deposit") {
         const manifest = await verifyManifest(
             resolve(process.cwd(), process.env.MANIFEST_FILE?.trim() || "../airlock-manifest.json"),
             resolve(process.cwd(), process.env.RELEASE_DIR?.trim() || "../fixtures/releases/demo"),
@@ -190,7 +215,35 @@ async function main() {
 
     if (!state.live?.capabilityId) throw new Error("Run LIVE_STEP=execute first");
     await assertCapabilityBinding(issuer, state.live.capabilityId, state, runtime);
-    const intent = paymentIntent(data, state, state.live.capabilityId, 1);
+    if (step === "deposit") {
+        const actionNonce = Number(await router.nextNonce(state.live.capabilityId));
+        const intent = depositIntent(state, state.live.capabilityId, actionNonce);
+        const signature = await runtime.signTypedData(
+            {
+                name: "AIRLOCK Tool Router",
+                version: "1",
+                chainId: network.chainId,
+                verifyingContract: state.creditcoin.router,
+            },
+            intentTypes,
+            intent,
+        );
+        const actionTransaction = await router.execute(intent, signature);
+        await actionTransaction.wait();
+        state.live.depositActionTx = actionTransaction.hash;
+        await save(state);
+        console.log(JSON.stringify({ depositActionTx: actionTransaction.hash }, null, 2));
+        return;
+    }
+
+    const evidence = new Contract(state.creditcoin.evidence, evidenceAbi, creditcoinRpc);
+    const releaseKey = await evidence.releaseKey(state.release.orgId, state.release.releaseDigest);
+    const status = await evidence.getStatus(releaseKey);
+    if (!status.revoked || Number(status.status) !== 2) {
+        throw new Error("import the proven revocation before LIVE_STEP=blocked");
+    }
+    const actionNonce = Number(await router.nextNonce(state.live.capabilityId));
+    const intent = paymentIntent(data, state, state.live.capabilityId, actionNonce);
     const signature = await runtime.signTypedData(
         {
             name: "AIRLOCK Tool Router",

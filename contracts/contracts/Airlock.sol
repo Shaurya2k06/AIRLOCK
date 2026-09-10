@@ -1532,12 +1532,19 @@ contract BoundedDepositValidator is IIntentValidator {
     error InvalidDeposit();
 
     address public immutable protocol;
+    bytes32 public immutable position;
     uint256 public immutable maxValue;
     bytes4 public immutable expectedSelector;
 
-    constructor(address protocol_, uint256 maxValue_, bytes4 selector_) {
-        if (protocol_ == address(0) || maxValue_ == 0 || selector_ == bytes4(0)) revert InvalidConfiguration();
+    constructor(address protocol_, bytes32 position_, uint256 maxValue_, bytes4 selector_) {
+        if (
+            protocol_ == address(0)
+                || position_ == bytes32(0)
+                || maxValue_ == 0
+                || selector_ == bytes4(0)
+        ) revert InvalidConfiguration();
         protocol = protocol_;
+        position = position_;
         maxValue = maxValue_;
         expectedSelector = selector_;
     }
@@ -1552,6 +1559,8 @@ contract BoundedDepositValidator is IIntentValidator {
         if (target != protocol || selector != expectedSelector || value == 0 || value > maxValue || data.length != 36) {
             revert InvalidDeposit();
         }
+        (bytes32 requestedPosition) = abi.decode(data[4:], (bytes32));
+        if (requestedPosition != position) revert InvalidDeposit();
         return value;
     }
 }

@@ -72,6 +72,7 @@ contract AirlockTest is Test {
     bytes32 private evaluatorSetHash = keccak256("airlock-demo-evaluators");
     bytes32 private paymentConstraints = keccak256("payment-v1");
     bytes32 private depositConstraints = keccak256("deposit-v1");
+    bytes32 private depositPosition = keccak256("airlock-demo-position");
 
     ArtifactRegistry private artifactRegistry;
     EvaluationRegistry private evaluationRegistry;
@@ -143,6 +144,7 @@ contract AirlockTest is Test {
         );
         depositValidator = new BoundedDepositValidator(
             address(protocol),
+            depositPosition,
             0.1 ether,
             BoundedDepositProtocol.deposit.selector
         );
@@ -414,7 +416,7 @@ contract AirlockTest is Test {
 
         bytes memory depositData = abi.encodeWithSelector(
             BoundedDepositProtocol.deposit.selector,
-            keccak256("position-1")
+            depositPosition
         );
         ToolRouter.ToolIntent memory deposit = _intent(
             depositLeaf,
@@ -426,7 +428,7 @@ contract AirlockTest is Test {
             keccak256("deposit-1")
         );
         router.execute(deposit, _sign(deposit));
-        assertEq(protocol.deposits(keccak256("position-1")), 0.1 ether);
+        assertEq(protocol.deposits(depositPosition), 0.1 ether);
         assertEq(issuer.get(capabilityId).spent, 0.3 ether);
 
         ToolRouter.ToolIntent memory replay = payment;
@@ -494,7 +496,7 @@ contract AirlockTest is Test {
             address(protocol),
             BoundedDepositProtocol.deposit.selector,
             depositData,
-            0,
+            0.1 ether,
             0,
             keccak256("invalid-deposit")
         );
@@ -699,7 +701,10 @@ contract AirlockTest is Test {
         new AllowlistedStablecoinPaymentValidator(address(0), vendorRecipient, 1, MockStablecoin.transfer.selector);
 
         vm.expectRevert(BoundedDepositValidator.InvalidConfiguration.selector);
-        new BoundedDepositValidator(address(0), 1, BoundedDepositProtocol.deposit.selector);
+        new BoundedDepositValidator(address(0), depositPosition, 1, BoundedDepositProtocol.deposit.selector);
+
+        vm.expectRevert(BoundedDepositValidator.InvalidConfiguration.selector);
+        new BoundedDepositValidator(address(protocol), bytes32(0), 1, BoundedDepositProtocol.deposit.selector);
     }
 
     function _importAllEvidence() internal {
