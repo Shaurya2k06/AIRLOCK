@@ -1,0 +1,12 @@
+.DS_Store
+node_modules/
+dist/
+coverage/
+artifacts/
+cache/
+types/
+deployments.json
+*.local
+contracts/.env
+client/.env
+server/.env

@@ -1,0 +1,4 @@
+:root { font-family: 'Manrope', ui-sans-serif, system-ui, sans-serif; color: #eef2e9; background: #091012; font-synthesis: none; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; }
+html { background: #091012; }
+body { margin: 0; min-width: 320px; min-height: 100vh; }
+button:focus-visible { outline: 2px solid #b8f4c4; outline-offset: 2px; }

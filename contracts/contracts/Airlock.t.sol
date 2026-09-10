@@ -1,0 +1,450 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.34;
+
+import {Test} from "forge-std/Test.sol";
+import {
+    AirlockAttestcoinAdapter,
+    AgentVault,
+    ArtifactRegistry,
+    BoundedDepositProtocol,
+    BoundedDepositValidator,
+    CapabilityIssuer,
+    DeploymentApprovalRegistry,
+    EvaluationRegistry,
+    EvidenceRegistry,
+    IBlockProver,
+    IReceiptDecoder,
+    MockBlockProver,
+    MockReceiptDecoder,
+    OfficialReceiptDecoder,
+    PolicyRegistry,
+    ReleaseStatusRegistry,
+    ToolRouter,
+    VendorPayments,
+    AllowlistedRecipientPaymentValidator
+} from "./Airlock.sol";
+
+contract OfficialReceiptDecoderTest is Test {
+    struct TestLog {
+        address address_;
+        bytes32[] topics;
+        bytes data;
+    }
+
+    function test_decodesOfficialReceiptShape() public {
+        OfficialReceiptDecoder decoder = new OfficialReceiptDecoder();
+        bytes32 topic = keccak256("AIRLOCK_TEST_EVENT");
+        bytes32[] memory topics = new bytes32[](1);
+        topics[0] = topic;
+        TestLog[] memory logs = new TestLog[](1);
+        logs[0] = TestLog({address_: address(0xBEEF), topics: topics, data: hex"1234"});
+
+        bytes[] memory chunks = new bytes[](3);
+        chunks[2] = abi.encode(uint8(1), uint64(21), logs, bytes(""));
+        bytes memory encodedTransaction = abi.encode(uint8(2), chunks);
+
+        IReceiptDecoder.ReceiptFields memory receipt = decoder.decodeReceiptFields(encodedTransaction);
+        assertEq(receipt.status, 1);
+        assertEq(receipt.logs.length, 1);
+        assertEq(receipt.logs[0].emitter, address(0xBEEF));
+        assertEq(receipt.logs[0].topics[0], topic);
+        assertEq(receipt.logs[0].data, hex"1234");
+    }
+}
+
+contract AirlockTest is Test {
+    uint256 private constant RUNTIME_PK = 0xA11CE;
+    uint64 private constant SOURCE_CHAIN_KEY = 1;
+
+    address private publisher = address(0x1001);
+    address private evaluator = address(0x1002);
+    address private approver = address(0x1003);
+    address private statusAuthority = address(0x1004);
+    address private admin = address(0x1005);
+    address private guardian = address(0x1006);
+
+    bytes32 private orgId = keccak256("airlock-demo-org");
+    bytes32 private releaseId = keccak256("airlock-demo-release");
+    bytes32 private releaseDigest = keccak256("airlock-demo-digest");
+    bytes32 private agentId = keccak256("airlock-demo-agent");
+    bytes32 private suiteHash = keccak256("airlock-demo-suite");
+    bytes32 private evaluatorSetHash = keccak256("airlock-demo-evaluators");
+    bytes32 private paymentConstraints = keccak256("payment-v1");
+    bytes32 private depositConstraints = keccak256("deposit-v1");
+
+    ArtifactRegistry private artifactRegistry;
+    EvaluationRegistry private evaluationRegistry;
+    DeploymentApprovalRegistry private approvalRegistry;
+    ReleaseStatusRegistry private statusRegistry;
+    MockBlockProver private prover;
+    MockReceiptDecoder private decoder;
+    EvidenceRegistry private evidence;
+    AirlockAttestcoinAdapter private adapter;
+    PolicyRegistry private policies;
+    CapabilityIssuer private issuer;
+    ToolRouter private router;
+    AgentVault private vault;
+    VendorPayments private vendor;
+    BoundedDepositProtocol private protocol;
+    AllowlistedRecipientPaymentValidator private paymentValidator;
+    BoundedDepositValidator private depositValidator;
+
+    address private runtimeKey;
+    address private vendorRecipient = address(0xBEEF);
+    bytes32 private paymentLeaf;
+    bytes32 private depositLeaf;
+    bytes32 private scopeRoot;
+    bytes32 private policyHash;
+    bytes32 private capabilityId;
+
+    function setUp() public {
+        vm.warp(1_000_000);
+        runtimeKey = vm.addr(RUNTIME_PK);
+
+        artifactRegistry = new ArtifactRegistry(publisher);
+        evaluationRegistry = new EvaluationRegistry(evaluator);
+        approvalRegistry = new DeploymentApprovalRegistry(approver);
+        statusRegistry = new ReleaseStatusRegistry(statusAuthority);
+        prover = new MockBlockProver();
+        decoder = new MockReceiptDecoder();
+        evidence = new EvidenceRegistry(admin);
+        adapter = new AirlockAttestcoinAdapter(
+            guardian,
+            SOURCE_CHAIN_KEY,
+            address(prover),
+            address(decoder),
+            address(evidence),
+            address(artifactRegistry),
+            address(evaluationRegistry),
+            address(approvalRegistry),
+            address(statusRegistry)
+        );
+        vm.prank(admin);
+        evidence.setAdapter(address(adapter));
+
+        policies = new PolicyRegistry(admin, guardian);
+        issuer = new CapabilityIssuer(admin, guardian, address(evidence), address(policies));
+        vault = new AgentVault(admin);
+        router = new ToolRouter(admin, address(issuer), address(vault));
+        vm.prank(admin);
+        vault.setRouter(address(router));
+        vm.prank(admin);
+        issuer.setRouter(address(router));
+
+        vendor = new VendorPayments();
+        protocol = new BoundedDepositProtocol();
+        paymentValidator = new AllowlistedRecipientPaymentValidator(
+            address(vendor),
+            vendorRecipient,
+            0.25 ether,
+            VendorPayments.pay.selector
+        );
+        depositValidator = new BoundedDepositValidator(
+            address(protocol),
+            0.1 ether,
+            BoundedDepositProtocol.deposit.selector
+        );
+
+        vm.prank(admin);
+        paymentLeaf = router.registerAction(
+            address(vendor),
+            VendorPayments.pay.selector,
+            address(paymentValidator),
+            paymentConstraints
+        );
+        vm.prank(admin);
+        depositLeaf = router.registerAction(
+            address(protocol),
+            BoundedDepositProtocol.deposit.selector,
+            address(depositValidator),
+            depositConstraints
+        );
+        scopeRoot = _pair(paymentLeaf, depositLeaf);
+
+        PolicyRegistry.PolicyInput memory input = PolicyRegistry.PolicyInput({
+            approvedSuiteHash: suiteHash,
+            approvedEvaluatorSetHash: evaluatorSetHash,
+            allowedToolScopeRoot: scopeRoot,
+            minSafetyScoreBps: 8_000,
+            deniedCapabilityBitmap: 0,
+            spendCeiling: 0.35 ether,
+            perCallCeiling: 0.25 ether,
+            callCeiling: 2,
+            capabilityTtl: 600,
+            statusFreshness: 900,
+            teeRequired: false
+        });
+        vm.prank(admin);
+        policyHash = policies.register(input);
+
+        _importAllEvidence();
+        vm.prank(address(this));
+        capabilityId = issuer.issue(orgId, agentId, releaseDigest, policyHash);
+        vm.deal(address(vault), 1 ether);
+    }
+
+    function test_SourceRolesAndProofImports() public {
+        EvidenceRegistry.ArtifactEvidence memory artifact = evidence.getArtifact(
+            evidence.releaseKey(orgId, releaseDigest)
+        );
+        EvidenceRegistry.EvaluationEvidence memory evaluation = evidence.getEvaluation(
+            evidence.releaseKey(orgId, releaseDigest)
+        );
+        EvidenceRegistry.ApprovalEvidence memory approval = evidence.getApproval(
+            evidence.releaseKey(orgId, releaseDigest)
+        );
+        EvidenceRegistry.StatusEvidence memory status = evidence.getStatus(
+            evidence.releaseKey(orgId, releaseDigest)
+        );
+
+        assertTrue(artifact.exists);
+        assertEq(artifact.releaseDigest, releaseDigest);
+        assertEq(evaluation.safetyScoreBps, 9_000);
+        assertEq(approval.runtimeKey, runtimeKey);
+        assertEq(status.status, 1);
+        assertFalse(status.revoked);
+    }
+
+    function test_CapabilityAndRouterContainment() public {
+        bytes memory paymentData = abi.encodeWithSelector(VendorPayments.pay.selector, vendorRecipient);
+        ToolRouter.ToolIntent memory payment = _intent(
+            paymentLeaf,
+            address(vendor),
+            VendorPayments.pay.selector,
+            paymentData,
+            0.2 ether,
+            0,
+            keccak256("payment-0")
+        );
+        bytes memory signature = _sign(payment);
+        router.execute(payment, signature);
+
+        assertEq(vendor.received(vendorRecipient), 0.2 ether);
+
+        bytes memory depositData = abi.encodeWithSelector(
+            BoundedDepositProtocol.deposit.selector,
+            keccak256("position-1")
+        );
+        ToolRouter.ToolIntent memory deposit = _intent(
+            depositLeaf,
+            address(protocol),
+            BoundedDepositProtocol.deposit.selector,
+            depositData,
+            0.1 ether,
+            1,
+            keccak256("deposit-1")
+        );
+        router.execute(deposit, _sign(deposit));
+        assertEq(protocol.deposits(keccak256("position-1")), 0.1 ether);
+
+        ToolRouter.ToolIntent memory replay = payment;
+        replay.idempotencyKey = keccak256("payment-replay");
+        replay.actionNonce = 0;
+        bytes memory replaySignature = _sign(replay);
+        vm.expectRevert(ToolRouter.Replay.selector);
+        router.execute(replay, replaySignature);
+    }
+
+    function test_RejectedActionsAndProvenRevocation() public {
+        bytes memory wrongRecipientData = abi.encodeWithSelector(VendorPayments.pay.selector, address(0xBAD));
+        ToolRouter.ToolIntent memory wrongRecipient = _intent(
+            paymentLeaf,
+            address(vendor),
+            VendorPayments.pay.selector,
+            wrongRecipientData,
+            0.1 ether,
+            0,
+            keccak256("wrong-recipient")
+        );
+        bytes memory wrongRecipientSignature = _sign(wrongRecipient);
+        vm.expectRevert(AllowlistedRecipientPaymentValidator.InvalidPayment.selector);
+        router.execute(wrongRecipient, wrongRecipientSignature);
+
+        bytes memory tooLargeData = abi.encodeWithSelector(VendorPayments.pay.selector, vendorRecipient);
+        ToolRouter.ToolIntent memory tooLarge = _intent(
+            paymentLeaf,
+            address(vendor),
+            VendorPayments.pay.selector,
+            tooLargeData,
+            0.3 ether,
+            0,
+            keccak256("too-large")
+        );
+        bytes memory tooLargeSignature = _sign(tooLarge);
+        vm.expectRevert(AllowlistedRecipientPaymentValidator.InvalidPayment.selector);
+        router.execute(tooLarge, tooLargeSignature);
+
+        _importRevocation();
+        bytes memory validData = abi.encodeWithSelector(VendorPayments.pay.selector, vendorRecipient);
+        ToolRouter.ToolIntent memory validAfterRevocation = _intent(
+            paymentLeaf,
+            address(vendor),
+            VendorPayments.pay.selector,
+            validData,
+            0.1 ether,
+            0,
+            keccak256("after-revocation")
+        );
+        bytes memory revokedSignature = _sign(validAfterRevocation);
+        vm.expectRevert(CapabilityIssuer.PausedCapability.selector);
+        router.execute(validAfterRevocation, revokedSignature);
+    }
+
+    function _importAllEvidence() internal {
+        bytes32 artifactTx = keccak256("artifact-tx");
+        bytes32 evaluationTx = keccak256("evaluation-tx");
+        bytes32 approvalTx = keccak256("approval-tx");
+        bytes32 statusTx = keccak256("status-tx");
+
+        bytes32 artifactRoot = keccak256("artifact-root");
+        bytes memory artifactData = abi.encode(
+            keccak256("manifest"),
+            artifactRoot,
+            keccak256("weights"),
+            keccak256("tokenizer"),
+            keccak256("prompt"),
+            scopeRoot,
+            keccak256("container"),
+            keccak256("sbom"),
+            keccak256("provenance"),
+            uint64(1),
+            uint64(1)
+        );
+        _setReceipt(
+            artifactTx,
+            address(artifactRegistry),
+            _topics(adapter.ARTIFACT_TOPIC(), orgId, releaseId, releaseDigest),
+            artifactData
+        );
+        adapter.importArtifact(_request(artifactTx, 0));
+
+        bytes memory evaluationData = abi.encode(
+            suiteHash,
+            keccak256("report"),
+            evaluatorSetHash,
+            uint32(9_000),
+            uint256(0),
+            uint64(block.timestamp),
+            uint64(block.timestamp + 1 days),
+            uint64(1)
+        );
+        _setReceipt(
+            evaluationTx,
+            address(evaluationRegistry),
+            _topics(adapter.EVALUATION_TOPIC(), orgId, releaseId, releaseDigest),
+            evaluationData
+        );
+        adapter.importEvaluation(_request(evaluationTx, 0));
+
+        bytes memory approvalData = abi.encode(
+            runtimeKey,
+            policyHash,
+            scopeRoot,
+            uint128(0.35 ether),
+            uint128(0.25 ether),
+            uint32(2),
+            uint64(block.timestamp),
+            uint64(block.timestamp + 1 days),
+            uint64(1)
+        );
+        _setReceipt(
+            approvalTx,
+            address(approvalRegistry),
+            _topics(adapter.APPROVAL_TOPIC(), orgId, agentId, releaseDigest),
+            approvalData
+        );
+        adapter.importApproval(_request(approvalTx, 0));
+
+        bytes memory statusData = abi.encode(uint64(1), uint64(block.timestamp), uint64(block.timestamp + 1 days));
+        _setReceipt(
+            statusTx,
+            address(statusRegistry),
+            _topics(adapter.STATUS_TOPIC(), orgId, releaseDigest, bytes32(uint256(1))),
+            statusData
+        );
+        adapter.importStatus(_request(statusTx, 0));
+    }
+
+    function _importRevocation() internal {
+        bytes32 revocationTx = keccak256("revocation-tx");
+        bytes memory data = abi.encode(uint64(2), uint64(block.timestamp));
+        _setReceipt(
+            revocationTx,
+            address(statusRegistry),
+            _topics(adapter.REVOCATION_TOPIC(), orgId, releaseDigest, keccak256("security")),
+            data
+        );
+        adapter.importRevocation(_request(revocationTx, 0));
+    }
+
+    function _setReceipt(bytes32 txHash, address emitter, bytes32[] memory topics, bytes memory data) internal {
+        prover.setProof(abi.encode(txHash), true);
+        decoder.setReceipt(abi.encode(txHash), 1, emitter, topics, data);
+    }
+
+    function _topics(bytes32 topic0, bytes32 a, bytes32 b, bytes32 c)
+        internal
+        pure
+        returns (bytes32[] memory topics)
+    {
+        topics = new bytes32[](4);
+        topics[0] = topic0;
+        topics[1] = a;
+        topics[2] = b;
+        topics[3] = c;
+    }
+
+    function _request(bytes32 txHash, uint32 logIndex)
+        internal
+        pure
+        returns (AirlockAttestcoinAdapter.ImportRequest memory request)
+    {
+        IBlockProver.MerkleProofEntry[] memory siblings = new IBlockProver.MerkleProofEntry[](0);
+        bytes32[] memory roots = new bytes32[](0);
+        request = AirlockAttestcoinAdapter.ImportRequest({
+            chainKey: SOURCE_CHAIN_KEY,
+            blockHeight: uint64(uint256(txHash)),
+            encodedTransaction: abi.encode(txHash),
+            merkleProof: IBlockProver.MerkleProof({root: bytes32(0), siblings: siblings}),
+            continuityProof: IBlockProver.ContinuityProof({lowerEndpointDigest: bytes32(0), roots: roots}),
+            logIndex: logIndex
+        });
+    }
+
+    function _intent(
+        bytes32 leaf,
+        address target,
+        bytes4 selector,
+        bytes memory data,
+        uint256 value,
+        uint64 actionNonce,
+        bytes32 idempotencyKey
+    ) internal view returns (ToolRouter.ToolIntent memory intent) {
+        bytes32[] memory proof = new bytes32[](1);
+        proof[0] = leaf == paymentLeaf ? depositLeaf : paymentLeaf;
+        intent = ToolRouter.ToolIntent({
+            capabilityId: capabilityId,
+            agentId: agentId,
+            target: target,
+            functionSelector: selector,
+            calldataHash: keccak256(data),
+            value: value,
+            deadline: uint64(block.timestamp + 60),
+            actionNonce: actionNonce,
+            idempotencyKey: idempotencyKey,
+            scopeLeaf: leaf,
+            scopeProof: proof,
+            data: data
+        });
+    }
+
+    function _sign(ToolRouter.ToolIntent memory intent) internal returns (bytes memory signature) {
+        bytes32 digest = router.hashIntent(intent);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(RUNTIME_PK, digest);
+        signature = abi.encodePacked(r, s, v);
+    }
+
+    function _pair(bytes32 a, bytes32 b) internal pure returns (bytes32) {
+        return a < b ? keccak256(abi.encodePacked(a, b)) : keccak256(abi.encodePacked(b, a));
+    }
+}

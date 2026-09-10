@@ -1,0 +1,8 @@
+{
+  "name": "airlock-demo-release",
+  "version": "1.0.0",
+  "mode": "base",
+  "artifact": "demo-only",
+  "weights": "demo-only",
+  "tools": ["vendor.pay", "protocol.deposit"]
+}

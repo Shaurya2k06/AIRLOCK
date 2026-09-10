@@ -1,0 +1,54 @@
+# AIRLOCK
+
+AIRLOCK is a release firewall for autonomous on-chain agents. It proves the
+artifact, evaluation, deployment approval, and active status of one release;
+then issues a short-lived capability that a typed router and vault enforce.
+
+```text
+Sepolia evidence → Attestcoin proof → deterministic capability
+→ EIP-712 tool intent → validator → vault execution → revocation
+```
+
+## Local verification
+
+```sh
+cd contracts && npm run ci
+cd ../server && npm test
+cd ../client && npm run build && npm run lint
+```
+
+The local contract suite is intentionally deterministic. It uses fixture proof
+and receipt adapters to exercise the complete authorization and containment
+path without requiring a wallet, RPC endpoint, or proof-builder account.
+
+The live path is available from `contracts`: `npm run deploy-live` deploys and
+seeds the two-chain demo, then `IMPORT_KIND=<kind> npm run import-proof` submits
+each real proof through Creditcoin's BlockProver. The worker submits proofs but
+has no evidence-writing or capability-issuance authority.
+
+After the four imports, `LIVE_STEP=execute npm run live-step` runs the allowed
+action; `LIVE_STEP=revoke`, a revocation proof import, and
+`LIVE_STEP=blocked` complete the negative path.
+
+## Live run inputs
+
+Copy `contracts/.env.example` to `contracts/.env` only when running the real
+Sepolia → Creditcoin flow. Private keys stay local and are never committed.
+Live deployments are written to `deployments.json`; generated addresses are
+not configuration inputs.
+
+## Current implementation
+
+- `contracts/contracts/Airlock.sol` — source registries, evidence adapter,
+  official decoder boundary, policy, capabilities, EIP-712 router, vault,
+  validators, and local proof fixtures.
+- `contracts/contracts/Airlock.t.sol` — end-to-end contract scenarios,
+  including proven revocation and negative actions.
+- `contracts/scripts/deploy-live.ts` and `contracts/scripts/import-proof.ts` —
+  reproducible Sepolia → Creditcoin deployment and proof submission.
+- `server/index.js` — dependency-free local control-plane API.
+- `client/src/App.tsx` — evidence, capability, and enforcement console.
+
+The base-mode claim is deliberately narrow: the capability binds a release
+digest to a runtime key; it does not prove that a running process loaded those
+weights. That requires the optional TEE binding described in `context.md`.
