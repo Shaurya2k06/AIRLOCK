@@ -125,7 +125,11 @@ async function main() {
     }
     if (!proof?.success || !proof.data) throw new Error(lastError ?? "Proof builder returned no proof");
     const data = proof.data;
-    if (data.chainKey !== sourceChainKey || data.headerNumber !== sourceReceipt.blockNumber) {
+    if (
+        data.txHash.toLowerCase() !== txHash.toLowerCase()
+            || data.chainKey !== sourceChainKey
+            || data.headerNumber !== sourceReceipt.blockNumber
+    ) {
         throw new Error("Proof response does not match the source transaction");
     }
 

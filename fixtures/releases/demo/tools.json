@@ -1,1 +1,1 @@
-{"vendor.pay":{"selector":"pay(address)","validator":"allowlisted-recipient"},"protocol.deposit":{"selector":"deposit(bytes32)","validator":"bounded-value"}}
+{"vendor.pay":{"selector":"transfer(address,uint256)","validator":"allowlisted-stablecoin"},"protocol.deposit":{"selector":"deposit(bytes32)","validator":"bounded-value"}}
