@@ -62,13 +62,15 @@ function timestamp(value) {
 async function readDeployment() {
   try {
     return JSON.parse(await fs.readFile(deploymentsFile, 'utf8'))
-  } catch {
-    return null
+  } catch (error) {
+    if (error.code === 'ENOENT') return null
+    throw error
   }
 }
 
 async function liveOverview(deployment) {
-  if (!deployment || !process.env.CREDITCOIN_RPC_URL) return fixtureState
+  if (!process.env.CREDITCOIN_RPC_URL) return fixtureState
+  if (!deployment) throw new Error('deployment metadata unavailable')
   const provider = new JsonRpcProvider(process.env.CREDITCOIN_RPC_URL)
   const network = await provider.getNetwork()
   if (deployment.creditcoin.chainId && Number(network.chainId) !== Number(deployment.creditcoin.chainId)) {
@@ -100,6 +102,11 @@ async function liveOverview(deployment) {
   }
   const releaseStatus = status.revoked ? 'REVOKED' : status.status === 1n || status.status === 1 ? 'ACTIVE' : 'PENDING'
   const recipient = deployment.release.paymentRecipient
+  const proof = (kind) => deployment.proofs?.[kind] || {}
+  const artifactProof = proof('artifact')
+  const evaluationProof = proof('evaluation')
+  const approvalProof = proof('approval')
+  const statusProof = proof('status')
   return {
     mode: 'live',
     dataSource: 'creditcoin-chain',
@@ -114,10 +121,10 @@ async function liveOverview(deployment) {
       artifactRoot: deployment.release.artifactRoot,
     },
     evidence: [
-      { kind: 'Artifact', status: artifact.exists ? 'PROVEN' : 'PENDING', detail: short(artifact.manifestHash) },
-      { kind: 'Evaluation', status: evaluation.exists ? 'PROVEN' : 'PENDING', detail: `Safety suite · ${(Number(evaluation.safetyScoreBps) / 100).toFixed(2)}%` },
-      { kind: 'Approval', status: approval.exists ? 'PROVEN' : 'PENDING', detail: `Runtime key · ${short(approval.runtimeKey)}` },
-      { kind: 'Active status', status: status.exists ? (status.revoked ? 'REVOKED' : 'PROVEN') : 'PENDING', detail: `Checkpoint #${status.statusNonce}` },
+      { ...artifactProof, kind: 'Artifact', status: artifact.exists ? 'PROVEN' : 'PENDING', detail: short(artifact.manifestHash) },
+      { ...evaluationProof, kind: 'Evaluation', status: evaluation.exists ? 'PROVEN' : 'PENDING', detail: `Safety suite · ${(Number(evaluation.safetyScoreBps) / 100).toFixed(2)}%` },
+      { ...approvalProof, kind: 'Approval', status: approval.exists ? 'PROVEN' : 'PENDING', detail: `Runtime key · ${short(approval.runtimeKey)}` },
+      { ...statusProof, kind: 'Active status', status: status.exists ? (status.revoked ? 'REVOKED' : 'PROVEN') : 'PENDING', detail: `Checkpoint #${status.statusNonce}` },
     ],
     capability,
     policy: { recipient, maxPayment: Number(formatEther(approval.perCallValueCap || 0n)) },
@@ -177,8 +184,12 @@ const server = http.createServer(async (request, response) => {
     return
   }
   if (request.method === 'GET' && url.pathname === '/health') {
-    const deployment = await readDeployment()
-    json(response, 200, { ok: true, service: 'airlock-control-plane', dataSource: deployment && process.env.CREDITCOIN_RPC_URL ? 'creditcoin-chain' : 'local-fixture' })
+    try {
+      const deployment = await readDeployment()
+      json(response, 200, { ok: true, service: 'airlock-control-plane', dataSource: deployment && process.env.CREDITCOIN_RPC_URL ? 'creditcoin-chain' : 'local-fixture' })
+    } catch (error) {
+      json(response, 503, { ok: false, service: 'airlock-control-plane', dataSource: 'rpc-error', error: error.message })
+    }
     return
   }
   if (request.method === 'GET' && url.pathname === '/api/overview') {

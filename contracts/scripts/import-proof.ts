@@ -1,6 +1,6 @@
 import "dotenv/config";
 
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { Contract, id, JsonRpcProvider, Wallet } from "ethers";
 import { chainInfo, proofProvider } from "@gluwa/usc-sdk";
@@ -42,9 +42,10 @@ async function main() {
     const kind = process.env.IMPORT_KIND as Kind | undefined;
     if (!kind || !(kind in methods)) usage();
 
+    const deploymentFile = resolve(process.cwd(), process.env.AIRLOCK_DEPLOYMENTS?.trim() || "../deployments.json");
     let deployment: any;
     try {
-        deployment = JSON.parse(await readFile(resolve(process.cwd(), "../deployments.json"), "utf8"));
+        deployment = JSON.parse(await readFile(deploymentFile, "utf8"));
     } catch {
         deployment = undefined;
     }
@@ -149,7 +150,7 @@ async function main() {
     const receipt = await transaction.wait();
     const sourceLog = sourceReceipt.logs[logIndex];
 
-    console.log(JSON.stringify({
+    const proofRecord = {
         kind,
         txHash,
         sourceChainKey,
@@ -164,7 +165,13 @@ async function main() {
         creditcoinTxHash: receipt.hash,
         creditcoinGasUsed: receipt.gasUsed?.toString(),
         cachedProof: data.cached,
-    }, null, 2));
+    };
+    if (deployment) {
+        deployment.proofs ||= {};
+        deployment.proofs[kind] = proofRecord;
+        await writeFile(deploymentFile, `${JSON.stringify(deployment, null, 2)}\n`);
+    }
+    console.log(JSON.stringify(proofRecord, null, 2));
 }
 
 main().catch((error) => {
