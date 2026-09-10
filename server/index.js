@@ -19,8 +19,8 @@ const fixtureState = {
     { kind: 'Approval', status: 'FIXTURE', detail: 'Runtime key · scoped' },
     { kind: 'Active status', status: 'FIXTURE', detail: 'Checkpoint #184' },
   ],
-  capability: { status: 'FIXTURE', spendCap: 350, spent: 130, callCap: 4, callsUsed: 2, runtimeKey: '0x8B31…6A14' },
-  policy: { recipient: '0x4E…91c2', maxPayment: 250 },
+  capability: { status: 'FIXTURE', spendCap: 350, spent: 130, callCap: 4, callsUsed: 2, runtimeKey: '0x8B31…6A14', scopeRoot: 'fixture', expiresAt: '08:41 UTC' },
+  policy: { recipient: '0x4E…91c2', maxPayment: 250, depositMax: 100 },
   actions: [
     { action: 'vendor.pay', target: '0x4E…91c2', amount: 24, state: 'Fixture allowed', age: '2m ago' },
     { action: 'protocol.deposit', target: '0xA1…0b72', amount: 10, state: 'Fixture allowed', age: '18m ago' },
@@ -85,12 +85,13 @@ async function liveOverview(deployment) {
     contract.getStatus(key),
   ])
   const capabilityId = deployment.live && deployment.live.capabilityId
-  let capability = { status: 'NO ACTIVE CAPABILITY', spendCap: 0, spent: 0, callCap: 0, callsUsed: 0, runtimeKey: short(deployment.release.runtimeKey) }
+  let capability = { status: 'NO ACTIVE CAPABILITY', spendCap: 0, spent: 0, callCap: 0, callsUsed: 0, runtimeKey: short(deployment.release.runtimeKey), scopeRoot: '—', expiresAt: '—' }
   if (capabilityId) {
     const issuer = new Contract(deployment.creditcoin.issuer, issuerAbi, provider)
     const current = await issuer.get(capabilityId)
     const now = Math.floor(Date.now() / 1000)
-    const state = current.revoked ? 'REVOKED' : now >= Number(current.expiresAt) ? 'EXPIRED' : 'ACTIVE'
+    const statusRevoked = status.revoked || status.status === 2n || status.status === 2
+    const state = statusRevoked || current.revoked ? 'REVOKED' : now >= Number(current.expiresAt) ? 'EXPIRED' : 'ACTIVE'
     capability = {
       status: state,
       spendCap: Number(formatEther(current.spendCap)),
@@ -98,6 +99,8 @@ async function liveOverview(deployment) {
       callCap: Number(current.callCap),
       callsUsed: Number(current.callsUsed),
       runtimeKey: short(current.runtimeKey),
+      scopeRoot: short(current.scopeRoot),
+      expiresAt: timestamp(current.expiresAt),
     }
   }
   const releaseStatus = status.revoked ? 'REVOKED' : status.status === 1n || status.status === 1 ? 'ACTIVE' : 'PENDING'
@@ -127,7 +130,11 @@ async function liveOverview(deployment) {
       { ...statusProof, kind: 'Active status', status: status.exists ? (status.revoked ? 'REVOKED' : 'PROVEN') : 'PENDING', detail: status.revoked ? `Revoked · ${short(status.reasonHash)}` : `Checkpoint #${status.statusNonce}` },
     ],
     capability,
-    policy: { recipient, maxPayment: Number(formatEther(approval.perCallValueCap || 0n)) },
+    policy: {
+      recipient,
+      maxPayment: Number(formatEther(approval.perCallValueCap || 0n)),
+      depositMax: Number(formatEther(BigInt(deployment.release.depositAmount || '100000000000000000'))),
+    },
     actions: deployment.live?.allowedActionTx
       ? [{ action: 'vendor.pay', target: short(recipient), amount: Number(formatEther(deployment.release.paymentAmount)), state: 'Allowed', age: short(deployment.live.allowedActionTx) }]
       : [],
