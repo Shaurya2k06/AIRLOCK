@@ -3,6 +3,8 @@ import "dotenv/config";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { Contract, Interface, JsonRpcProvider, Wallet, id, keccak256 } from "ethers";
+// @ts-expect-error The manifest CLI is intentionally plain ESM for direct Node execution.
+import { verifyManifest } from "./manifest.mjs";
 
 const issuerAbi = [
     "function issue(bytes32 orgId,bytes32 agentId,bytes32 releaseDigest,bytes32 policyHash) returns (bytes32 capabilityId)",
@@ -47,7 +49,7 @@ function paymentIntent(data: string, deploymentState: any, capabilityId: string,
         capabilityId,
         agentId: deploymentState.release.agentId,
         target: deploymentState.creditcoin.vendor,
-        functionSelector: "0xa9059cbb",
+        functionSelector: id("pay(address)").slice(0, 10),
         calldataHash: keccak256(data),
         value: BigInt(deploymentState.release.paymentAmount),
         deadline: BigInt(Math.floor(Date.now() / 1000) + 300),
@@ -65,6 +67,16 @@ async function main() {
         throw new Error("Set LIVE_STEP=execute, revoke, or blocked");
     }
     const state = await deployment();
+
+    if (step === "execute") {
+        const manifest = await verifyManifest(
+            resolve(process.cwd(), process.env.MANIFEST_FILE?.trim() || "../airlock-manifest.json"),
+            resolve(process.cwd(), process.env.RELEASE_DIR?.trim() || "../fixtures/releases/demo"),
+        );
+        if (manifest.releaseDigest !== state.release.releaseDigest) {
+            throw new Error("release files no longer match the deployed release digest");
+        }
+    }
 
     if (step === "revoke") {
         const sourceRpc = new JsonRpcProvider(required("SOURCE_CHAIN_RPC_URL"));

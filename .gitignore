@@ -6,6 +6,7 @@ artifacts/
 cache/
 types/
 deployments.json
+airlock-manifest.json
 *.local
 contracts/.env
 client/.env

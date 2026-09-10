@@ -116,11 +116,13 @@ abstract contract RoleAddress {
 
 contract ArtifactRegistry is RoleAddress {
     error DuplicateRelease();
+    error DuplicateVersion();
     error StaleNonce();
     error InvalidVersion();
 
     mapping(bytes32 => uint64) public latestNonce;
     mapping(bytes32 => bool) public publishedDigest;
+    mapping(bytes32 => mapping(uint64 => bool)) public publishedVersion;
 
     event ArtifactPublished(
         bytes32 indexed orgId,
@@ -159,10 +161,12 @@ contract ArtifactRegistry is RoleAddress {
     ) external onlyRole {
         if (releaseVersion == 0) revert InvalidVersion();
         if (publishedDigest[releaseDigest]) revert DuplicateRelease();
+        if (publishedVersion[orgId][releaseVersion]) revert DuplicateVersion();
         if (publisherNonce <= latestNonce[orgId]) revert StaleNonce();
 
         latestNonce[orgId] = publisherNonce;
         publishedDigest[releaseDigest] = true;
+        publishedVersion[orgId][releaseVersion] = true;
         emit ArtifactPublished(
             orgId,
             releaseId,
@@ -185,6 +189,7 @@ contract ArtifactRegistry is RoleAddress {
 contract EvaluationRegistry is RoleAddress {
     error StaleNonce();
     error InvalidWindow();
+    error InvalidScore();
 
     mapping(bytes32 => uint64) public latestNonce;
 
@@ -219,6 +224,7 @@ contract EvaluationRegistry is RoleAddress {
     ) external onlyRole {
         if (evaluationNonce <= latestNonce[orgId]) revert StaleNonce();
         if (validUntil <= evaluatedAt) revert InvalidWindow();
+        if (safetyScoreBps > 10_000) revert InvalidScore();
         latestNonce[orgId] = evaluationNonce;
         emit EvaluationCertified(
             orgId,
@@ -360,6 +366,7 @@ contract ReleaseStatusRegistry is RoleAddress {
 contract EvidenceRegistry is RoleAddress {
     error Replay();
     error StaleStatus();
+    error AlreadyRevoked();
     error AdapterAlreadySet();
     error UnauthorizedAdapter();
 
@@ -491,6 +498,7 @@ contract EvidenceRegistry is RoleAddress {
     function recordStatus(StatusEvidence calldata value) external onlyAdapter {
         bytes32 key = releaseKey(value.orgId, value.releaseDigest);
         if (_statuses[key].exists && value.statusNonce <= _statuses[key].statusNonce) revert StaleStatus();
+        if (_statuses[key].revoked) revert AlreadyRevoked();
         _statuses[key] = value;
         emit EvidenceImported(4, value.evidenceId, key);
     }
@@ -527,6 +535,8 @@ contract AirlockAttestcoinAdapter is RoleAddress {
     error WrongEmitter();
     error WrongTopic();
     error WrongTopicCount();
+    error WrongDataLength();
+    error InvalidStatus();
     error Replay();
     error MalformedLog();
 
@@ -570,6 +580,7 @@ contract AirlockAttestcoinAdapter is RoleAddress {
     address public immutable evaluationEmitter;
     address public immutable approvalEmitter;
     address public immutable statusEmitter;
+    address public immutable admin;
 
     bool public paused;
     mapping(bytes32 => bool) public usedQuery;
@@ -578,6 +589,7 @@ contract AirlockAttestcoinAdapter is RoleAddress {
     event ProofImported(uint8 indexed kind, bytes32 indexed queryKey, bytes32 indexed evidenceId);
 
     constructor(
+        address admin_,
         address guardian,
         uint64 sourceChainKey_,
         address verifier_,
@@ -588,7 +600,18 @@ contract AirlockAttestcoinAdapter is RoleAddress {
         address approvalEmitter_,
         address statusEmitter_
     ) RoleAddress(guardian) {
+        if (admin_ == address(0)) revert ZeroAddress();
+        if (
+            verifier_ == address(0)
+                || decoder_ == address(0)
+                || evidence_ == address(0)
+                || artifactEmitter_ == address(0)
+                || evaluationEmitter_ == address(0)
+                || approvalEmitter_ == address(0)
+                || statusEmitter_ == address(0)
+        ) revert ZeroAddress();
         sourceChainKey = sourceChainKey_;
+        admin = admin_;
         verifier = IBlockProver(verifier_);
         decoder = IReceiptDecoder(decoder_);
         evidence = EvidenceRegistry(evidence_);
@@ -602,7 +625,8 @@ contract AirlockAttestcoinAdapter is RoleAddress {
         paused = true;
     }
 
-    function unpause() external onlyRole {
+    function unpause() external {
+        if (msg.sender != admin) revert Unauthorized();
         paused = false;
     }
 
@@ -612,7 +636,8 @@ contract AirlockAttestcoinAdapter is RoleAddress {
             request,
             artifactEmitter,
             ARTIFACT_TOPIC,
-            4
+            4,
+            352
         );
         if (data.length == 0 || topics.length != 4) revert MalformedLog();
         (
@@ -628,6 +653,7 @@ contract AirlockAttestcoinAdapter is RoleAddress {
             uint64 releaseVersion,
             uint64 publisherNonce
         ) = abi.decode(data, (bytes32, bytes32, bytes32, bytes32, bytes32, bytes32, bytes32, bytes32, bytes32, uint64, uint64));
+        if (releaseVersion == 0 || publisherNonce == 0) revert MalformedLog();
         bytes32 orgId = topics[1];
         bytes32 releaseId = topics[2];
         bytes32 releaseDigest = topics[3];
@@ -661,7 +687,8 @@ contract AirlockAttestcoinAdapter is RoleAddress {
             request,
             evaluationEmitter,
             EVALUATION_TOPIC,
-            4
+            4,
+            256
         );
         (
             bytes32 suiteHash,
@@ -673,6 +700,7 @@ contract AirlockAttestcoinAdapter is RoleAddress {
             uint64 validUntil,
             uint64 evaluationNonce
         ) = abi.decode(data, (bytes32, bytes32, bytes32, uint32, uint256, uint64, uint64, uint64));
+        if (safetyScoreBps > 10_000 || validUntil <= evaluatedAt || evaluationNonce == 0) revert MalformedLog();
         bytes32 orgId = topics[1];
         bytes32 releaseId = topics[2];
         bytes32 releaseDigest = topics[3];
@@ -703,7 +731,8 @@ contract AirlockAttestcoinAdapter is RoleAddress {
             request,
             approvalEmitter,
             APPROVAL_TOPIC,
-            4
+            4,
+            288
         );
         (
             address runtimeKey,
@@ -716,6 +745,9 @@ contract AirlockAttestcoinAdapter is RoleAddress {
             uint64 validUntil,
             uint64 approvalNonce
         ) = abi.decode(data, (address, bytes32, bytes32, uint128, uint128, uint32, uint64, uint64, uint64));
+        if (runtimeKey == address(0) || callCap == 0 || validUntil <= validAfter || approvalNonce == 0) {
+            revert MalformedLog();
+        }
         bytes32 orgId = topics[1];
         bytes32 agentId = topics[2];
         bytes32 releaseDigest = topics[3];
@@ -747,12 +779,14 @@ contract AirlockAttestcoinAdapter is RoleAddress {
             request,
             statusEmitter,
             STATUS_TOPIC,
-            4
+            4,
+            96
         );
         (uint64 statusNonce, uint64 issuedAt, uint64 validUntil) = abi.decode(data, (uint64, uint64, uint64));
         bytes32 orgId = topics[1];
         bytes32 releaseDigest = topics[2];
         uint8 status = uint8(uint256(topics[3]));
+        if (status != 1 || statusNonce == 0 || validUntil <= issuedAt) revert InvalidStatus();
         evidenceId = _mark(STATUS, queryKey, releaseDigest);
         evidence.recordStatus(
             EvidenceRegistry.StatusEvidence({
@@ -776,11 +810,13 @@ contract AirlockAttestcoinAdapter is RoleAddress {
             request,
             statusEmitter,
             REVOCATION_TOPIC,
-            4
+            4,
+            64
         );
         (uint64 statusNonce, uint64 revokedAt) = abi.decode(data, (uint64, uint64));
         bytes32 orgId = topics[1];
         bytes32 releaseDigest = topics[2];
+        if (statusNonce == 0) revert MalformedLog();
         evidenceId = _mark(REVOCATION, queryKey, releaseDigest);
         evidence.recordRevocation(orgId, releaseDigest, statusNonce, revokedAt, evidenceId);
         emit ProofImported(REVOCATION, queryKey, evidenceId);
@@ -809,7 +845,8 @@ contract AirlockAttestcoinAdapter is RoleAddress {
         ImportRequest calldata request,
         address expectedEmitter,
         bytes32 expectedTopic,
-        uint256 expectedTopicCount
+        uint256 expectedTopicCount,
+        uint256 expectedDataLength
     ) internal view returns (bytes32 queryKey, bytes32[] memory topics, bytes memory data) {
         if (paused) revert Paused();
         if (request.chainKey != sourceChainKey) revert UnsupportedChain();
@@ -828,6 +865,7 @@ contract AirlockAttestcoinAdapter is RoleAddress {
         if (log.emitter != expectedEmitter) revert WrongEmitter();
         if (log.topics.length != expectedTopicCount) revert WrongTopicCount();
         if (log.topics[0] != expectedTopic) revert WrongTopic();
+        if (log.data.length != expectedDataLength) revert WrongDataLength();
 
         uint64 transactionIndex = verifier.calculateTxIndex(request.merkleProof);
         queryKey = queryKeyFor(request.chainKey, request.blockHeight, transactionIndex, request.logIndex, log.emitter);
@@ -989,6 +1027,7 @@ contract CapabilityIssuer is RoleAddress {
     mapping(bytes32 => bool) public releasePaused;
     mapping(bytes32 => bool) public agentPaused;
     mapping(address => bool) public runtimePaused;
+    mapping(address => bool) public targetPaused;
 
     event CapabilityIssued(bytes32 indexed capabilityId, bytes32 indexed releaseDigest, address indexed runtimeKey);
     event CapabilityRevoked(bytes32 indexed capabilityId);
@@ -1142,6 +1181,11 @@ contract CapabilityIssuer is RoleAddress {
         emit AuthorityPaused(bytes32(uint256(uint160(runtimeKey))), 4, true);
     }
 
+    function pauseTarget(address target) external onlyGuardian {
+        targetPaused[target] = true;
+        emit AuthorityPaused(bytes32(uint256(uint160(target))), 5, true);
+    }
+
     function unpauseOrg(bytes32 orgId) external onlyRole {
         orgPaused[orgId] = false;
     }
@@ -1156,6 +1200,10 @@ contract CapabilityIssuer is RoleAddress {
 
     function unpauseRuntime(address runtimeKey) external onlyRole {
         runtimePaused[runtimeKey] = false;
+    }
+
+    function unpauseTarget(address target) external onlyRole {
+        targetPaused[target] = false;
     }
 
     modifier onlyGuardian() {
@@ -1238,6 +1286,7 @@ contract ToolRouter is RoleAddress {
     error Replay();
     error Expired();
     error UnsupportedAction();
+    error PausedTarget();
     error Reentrancy();
 
     struct ActionRule {
@@ -1338,6 +1387,7 @@ contract ToolRouter is RoleAddress {
 
         CapabilityIssuer.Capability memory capability = issuer.get(intent.capabilityId);
         if (capability.runtimeKey == address(0) || capability.agentId != intent.agentId) revert InvalidIntent();
+        if (issuer.targetPaused(intent.target)) revert PausedTarget();
         if (intent.deadline < block.timestamp || intent.deadline >= capability.expiresAt) revert Expired();
         if (intent.actionNonce != nextNonce[intent.capabilityId]) revert Replay();
         if (usedIdempotency[intent.idempotencyKey]) revert Replay();

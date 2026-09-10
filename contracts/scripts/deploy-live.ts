@@ -1,7 +1,7 @@
 import "dotenv/config";
 
-import { readFile, readdir, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { readFile, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import {
     AbiCoder,
     BaseContract,
@@ -13,9 +13,10 @@ import {
     parseEther,
     Wallet,
     getAddress,
-    toUtf8Bytes,
 } from "ethers";
 import { chainInfo } from "@gluwa/usc-sdk";
+// @ts-expect-error The manifest CLI is intentionally plain ESM for direct Node execution.
+import { buildManifest } from "./manifest.mjs";
 
 const BLOCK_PROVER = "0x0000000000000000000000000000000000000fd2";
 const abi = AbiCoder.defaultAbiCoder();
@@ -49,29 +50,6 @@ function scopeLeaf(target: string, functionSelector: string, validator: string, 
         validator,
         constraintsHash,
     ]));
-}
-
-async function filesUnder(directory: string, prefix = ""): Promise<string[]> {
-    const entries = await readdir(directory, { withFileTypes: true });
-    const files: string[] = [];
-    for (const entry of entries) {
-        const relativePath = join(prefix, entry.name);
-        if (entry.isDirectory()) files.push(...await filesUnder(join(directory, entry.name), relativePath));
-        else files.push(relativePath);
-    }
-    return files.sort();
-}
-
-async function releaseDigest(directory: string): Promise<string> {
-    const files = await filesUnder(directory);
-    if (files.length === 0) throw new Error(`Release directory is empty: ${directory}`);
-    const chunks: Uint8Array[] = [];
-    for (const file of files) {
-        const path = join(directory, file);
-        const content = await readFile(path);
-        chunks.push(...[toUtf8Bytes(file), content]);
-    }
-    return keccak256(concat(chunks));
 }
 
 async function deploy(name: string, signer: Wallet, ...args: unknown[]): Promise<BaseContract> {
@@ -130,24 +108,13 @@ async function main() {
         throw new Error(`CREDITCOIN_CHAIN_ID=${configuredCreditcoinChainId} does not match RPC chain ${creditcoinNetwork.chainId}`);
     }
     const sourceKey = await sourceChainKey(creditcoinRpc, sourceChainId);
-    const orgId = bytes32(required("ORG_ID"), "ORG_ID");
-    const releaseId = bytes32(required("RELEASE_ID"), "RELEASE_ID");
+    const orgInput = required("ORG_ID");
+    const releaseInput = required("RELEASE_ID");
     const agentId = bytes32(required("AGENT_ID"), "AGENT_ID");
     const recipient = getAddress(required("PAYMENT_RECIPIENT"));
     const paymentAmount = parseEther(required("PAYMENT_AMOUNT"));
     const depositTarget = bytes32(process.env.DEPOSIT_TARGET?.trim() || "airlock-demo-position", "DEPOSIT_TARGET");
     const releaseDirectory = resolve(process.cwd(), process.env.RELEASE_DIR?.trim() || "../fixtures/releases/demo");
-    const digest = await releaseDigest(releaseDirectory);
-    const manifestHash = digest;
-    const artifactRoot = id(`AIRLOCK_ARTIFACT_ROOT:${digest}`);
-    const weightsHash = id(`AIRLOCK_WEIGHTS:${digest}`);
-    const tokenizerHash = id(`AIRLOCK_TOKENIZER:${digest}`);
-    const systemPromptHash = id(`AIRLOCK_SYSTEM_PROMPT:${digest}`);
-    const containerImageDigest = id(`AIRLOCK_CONTAINER:${digest}`);
-    const sbomHash = id(`AIRLOCK_SBOM:${digest}`);
-    const provenanceHash = id(`AIRLOCK_PROVENANCE:${digest}`);
-    const suiteHash = id("AIRLOCK_SUITE_V1");
-    const evaluatorSetHash = id("AIRLOCK_EVALUATORS_V1");
     const paymentSelector = selector("pay(address)");
     const depositSelector = selector("deposit(bytes32)");
     const paymentConstraints = id("AIRLOCK_PAYMENT_V1");
@@ -178,6 +145,30 @@ async function main() {
     const paymentLeaf = scopeLeaf(await vendor.getAddress(), paymentSelector, await paymentValidator.getAddress(), paymentConstraints);
     const depositLeaf = scopeLeaf(await protocol.getAddress(), depositSelector, await depositValidator.getAddress(), depositConstraints);
     const scopeRoot = pair(paymentLeaf, depositLeaf);
+    const manifest = await buildManifest({
+        input: releaseDirectory,
+        output: resolve(process.cwd(), process.env.MANIFEST_FILE?.trim() || "../airlock-manifest.json"),
+        orgId: orgInput,
+        releaseId: releaseInput,
+        releaseVersion: process.env.RELEASE_VERSION || "1",
+        componentOverrides: { toolManifestRoot: scopeRoot },
+    });
+    const orgId = manifest.payload.orgId;
+    const releaseId = manifest.payload.releaseId;
+    const digest = manifest.releaseDigest;
+    const manifestHash = manifest.manifestHash;
+    const artifactRoot = manifest.artifactRoot;
+    const {
+        weightsHash,
+        tokenizerHash,
+        systemPromptHash,
+        toolManifestRoot,
+        containerImageDigest,
+        sbomHash,
+        provenanceHash,
+    } = manifest.payload.components;
+    const suiteHash = manifest.payload.suiteId;
+    const evaluatorSetHash = id("AIRLOCK_EVALUATORS_V1");
     const spendCeiling = paymentAmount + parseEther("0.1");
     const perCallCeiling = paymentAmount;
     const policyInput = {
@@ -226,6 +217,7 @@ async function main() {
     const adapter = await deploy(
         "AirlockAttestcoinAdapter",
         creditcoinDeployer,
+        await policyAdmin.getAddress(),
         await guardian.getAddress(),
         sourceKey,
         BLOCK_PROVER,
@@ -262,11 +254,11 @@ async function main() {
         weightsHash,
         tokenizerHash,
         systemPromptHash,
-        scopeRoot,
+        toolManifestRoot,
         containerImageDigest,
         sbomHash,
         provenanceHash,
-        1,
+        manifest.payload.releaseVersion,
         1,
     );
     const evaluationTx = await send(
@@ -334,6 +326,9 @@ async function main() {
             releaseId,
             agentId,
             releaseDigest: digest,
+            releaseVersion: manifest.payload.releaseVersion,
+            manifestHash,
+            artifactRoot,
             policyHash,
             scopeRoot,
             paymentLeaf,

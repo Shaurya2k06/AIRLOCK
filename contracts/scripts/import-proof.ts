@@ -109,8 +109,20 @@ async function main() {
         numberEnv("ATTESTATION_EXTRA_DELAY_MS", 15_000),
     );
 
-    const proof = await proofBuilder.getProof(txHash);
-    if (!proof.success || !proof.data) throw new Error(proof.error ?? "Proof builder returned no proof");
+    const retryCount = numberEnv("WORKER_RETRIES", 4) ?? 4;
+    const backoffMs = numberEnv("WORKER_BACKOFF_MS", 2_000) ?? 2_000;
+    let proof;
+    let lastError;
+    for (let attempt = 1; attempt <= retryCount; attempt += 1) {
+        const result = await proofBuilder.getProof(txHash);
+        if (result.success && result.data) {
+            proof = result;
+            break;
+        }
+        lastError = result.error ?? "Proof builder returned no proof";
+        if (attempt < retryCount) await new Promise((resolve) => setTimeout(resolve, backoffMs * attempt));
+    }
+    if (!proof?.success || !proof.data) throw new Error(lastError ?? "Proof builder returned no proof");
     const data = proof.data;
     if (data.chainKey !== sourceChainKey || data.headerNumber !== sourceReceipt.blockNumber) {
         throw new Error("Proof response does not match the source transaction");
@@ -135,14 +147,22 @@ async function main() {
     };
     const transaction = await adapter[methods[kind]](request);
     const receipt = await transaction.wait();
+    const sourceLog = sourceReceipt.logs[logIndex];
 
     console.log(JSON.stringify({
         kind,
         txHash,
         sourceChainKey,
         sourceBlock: sourceReceipt.blockNumber,
+        sourceTxIndex: data.txIndex,
         logIndex,
+        sourceEmitter: sourceLog?.address,
+        sourceTopic0: sourceLog?.topics[0],
+        receiptStatus: sourceReceipt.status,
+        proofBytes: (data.txBytes.length - 2) / 2,
+        merkleSiblingCount: data.merkleProof.siblings.length,
         creditcoinTxHash: receipt.hash,
+        creditcoinGasUsed: receipt.gasUsed?.toString(),
         cachedProof: data.cached,
     }, null, 2));
 }

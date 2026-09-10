@@ -10,5 +10,8 @@
   "keywords": [],
   "author": "",
   "license": "MIT",
-  "type": "commonjs"
+  "type": "commonjs",
+  "dependencies": {
+    "ethers": "^6.17.0"
+  }
 }

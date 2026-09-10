@@ -19,6 +19,7 @@ import {
     OfficialReceiptDecoder,
     PolicyRegistry,
     ReleaseStatusRegistry,
+    RoleAddress,
     ToolRouter,
     VendorPayments,
     AllowlistedRecipientPaymentValidator
@@ -109,6 +110,7 @@ contract AirlockTest is Test {
         decoder = new MockReceiptDecoder();
         evidence = new EvidenceRegistry(admin);
         adapter = new AirlockAttestcoinAdapter(
+            admin,
             guardian,
             SOURCE_CHAIN_KEY,
             address(prover),
@@ -205,6 +207,146 @@ contract AirlockTest is Test {
         assertFalse(status.revoked);
     }
 
+    function test_AdapterRejectsMalformedReceiptsBeforeEvidenceMutation() public {
+        bytes32 malformedArtifactTx = keccak256("malformed-artifact-tx");
+        bytes32 malformedOrg = keccak256("malformed-org");
+        bytes32 malformedReleaseId = keccak256("malformed-release-id");
+        bytes32 malformedDigest = keccak256("malformed-digest");
+        _setReceipt(
+            malformedArtifactTx,
+            address(artifactRegistry),
+            _topics(adapter.ARTIFACT_TOPIC(), malformedOrg, malformedReleaseId, malformedDigest),
+            hex"01"
+        );
+        vm.expectRevert(AirlockAttestcoinAdapter.WrongDataLength.selector);
+        adapter.importArtifact(_request(malformedArtifactTx, 0));
+        assertFalse(evidence.getArtifact(evidence.releaseKey(malformedOrg, malformedDigest)).exists);
+
+        bytes32 invalidStatusTx = keccak256("invalid-status-tx");
+        bytes32 invalidStatusOrg = keccak256("invalid-status-org");
+        bytes32 invalidStatusDigest = keccak256("invalid-status-digest");
+        _setReceipt(
+            invalidStatusTx,
+            address(statusRegistry),
+            _topics(adapter.STATUS_TOPIC(), invalidStatusOrg, invalidStatusDigest, bytes32(0)),
+            abi.encode(uint64(1), uint64(block.timestamp), uint64(block.timestamp + 1 days))
+        );
+        vm.expectRevert(AirlockAttestcoinAdapter.InvalidStatus.selector);
+        adapter.importStatus(_request(invalidStatusTx, 0));
+        assertFalse(evidence.getStatus(evidence.releaseKey(invalidStatusOrg, invalidStatusDigest)).exists);
+    }
+
+    function test_AdapterRejectsWrongProofBindings() public {
+        bytes32 txHash = keccak256("wrong-proof-binding");
+        bytes memory data = abi.encode(
+            keccak256("manifest"),
+            keccak256("root"),
+            keccak256("weights"),
+            keccak256("tokenizer"),
+            keccak256("prompt"),
+            scopeRoot,
+            keccak256("container"),
+            keccak256("sbom"),
+            keccak256("provenance"),
+            uint64(1),
+            uint64(1)
+        );
+        bytes32[] memory validTopics = _topics(adapter.ARTIFACT_TOPIC(), orgId, releaseId, keccak256("other-digest"));
+
+        _setReceipt(txHash, address(0xBAD), validTopics, data);
+        vm.expectRevert(AirlockAttestcoinAdapter.WrongEmitter.selector);
+        adapter.importArtifact(_request(txHash, 0));
+
+        validTopics[0] = keccak256("wrong-topic");
+        _setReceipt(txHash, address(artifactRegistry), validTopics, data);
+        vm.expectRevert(AirlockAttestcoinAdapter.WrongTopic.selector);
+        adapter.importArtifact(_request(txHash, 0));
+
+        validTopics[0] = adapter.ARTIFACT_TOPIC();
+        _setReceipt(txHash, address(artifactRegistry), validTopics, data);
+        AirlockAttestcoinAdapter.ImportRequest memory wrongChain = _request(txHash, 0);
+        wrongChain.chainKey = SOURCE_CHAIN_KEY + 1;
+        vm.expectRevert(AirlockAttestcoinAdapter.UnsupportedChain.selector);
+        adapter.importArtifact(wrongChain);
+
+        _setReceipt(txHash, address(artifactRegistry), validTopics, data);
+        adapter.importArtifact(_request(txHash, 0));
+        vm.expectRevert(AirlockAttestcoinAdapter.Replay.selector);
+        adapter.importArtifact(_request(txHash, 0));
+    }
+
+    function test_SourceRegistryRejectsWrongRolesAndScores() public {
+        vm.expectRevert(RoleAddress.Unauthorized.selector);
+        artifactRegistry.publish(
+            orgId,
+            releaseId,
+            keccak256("unauthorized"),
+            keccak256("manifest"),
+            keccak256("root"),
+            keccak256("weights"),
+            keccak256("tokenizer"),
+            keccak256("prompt"),
+            scopeRoot,
+            keccak256("container"),
+            keccak256("sbom"),
+            keccak256("provenance"),
+            1,
+            1
+        );
+
+        vm.prank(evaluator);
+        vm.expectRevert(EvaluationRegistry.InvalidScore.selector);
+        evaluationRegistry.certify(
+            orgId,
+            releaseId,
+            releaseDigest,
+            suiteHash,
+            keccak256("report"),
+            evaluatorSetHash,
+            10_001,
+            0,
+            uint64(block.timestamp),
+            uint64(block.timestamp + 1 days),
+            1
+        );
+
+        vm.prank(publisher);
+        artifactRegistry.publish(
+            orgId,
+            releaseId,
+            keccak256("first-digest"),
+            keccak256("manifest"),
+            keccak256("root"),
+            keccak256("weights"),
+            keccak256("tokenizer"),
+            keccak256("prompt"),
+            scopeRoot,
+            keccak256("container"),
+            keccak256("sbom"),
+            keccak256("provenance"),
+            1,
+            1
+        );
+        vm.prank(publisher);
+        vm.expectRevert(ArtifactRegistry.DuplicateVersion.selector);
+        artifactRegistry.publish(
+            orgId,
+            releaseId,
+            keccak256("second-digest"),
+            keccak256("manifest"),
+            keccak256("root"),
+            keccak256("weights"),
+            keccak256("tokenizer"),
+            keccak256("prompt"),
+            scopeRoot,
+            keccak256("container"),
+            keccak256("sbom"),
+            keccak256("provenance"),
+            1,
+            2
+        );
+    }
+
     function test_CapabilityAndRouterContainment() public {
         bytes memory paymentData = abi.encodeWithSelector(VendorPayments.pay.selector, vendorRecipient);
         ToolRouter.ToolIntent memory payment = _intent(
@@ -288,6 +430,39 @@ contract AirlockTest is Test {
         bytes memory revokedSignature = _sign(validAfterRevocation);
         vm.expectRevert(CapabilityIssuer.PausedCapability.selector);
         router.execute(validAfterRevocation, revokedSignature);
+    }
+
+    function test_GuardianTargetPauseOnlyReducesAuthority() public {
+        bytes memory data = abi.encodeWithSelector(VendorPayments.pay.selector, vendorRecipient);
+        ToolRouter.ToolIntent memory intent = _intent(
+            paymentLeaf,
+            address(vendor),
+            VendorPayments.pay.selector,
+            data,
+            0.1 ether,
+            0,
+            keccak256("target-pause")
+        );
+        vm.prank(guardian);
+        issuer.pauseTarget(address(vendor));
+        bytes memory pausedSignature = _sign(intent);
+        vm.expectRevert(ToolRouter.PausedTarget.selector);
+        router.execute(intent, pausedSignature);
+
+        vm.prank(admin);
+        issuer.unpauseTarget(address(vendor));
+        router.execute(intent, _sign(intent));
+        assertEq(vendor.received(vendorRecipient), 0.1 ether);
+    }
+
+    function test_AdapterGuardianPauseRequiresAdminToUnpause() public {
+        vm.prank(guardian);
+        adapter.pause();
+        vm.prank(guardian);
+        vm.expectRevert(RoleAddress.Unauthorized.selector);
+        adapter.unpause();
+        vm.prank(admin);
+        adapter.unpause();
     }
 
     function _importAllEvidence() internal {

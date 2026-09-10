@@ -1,0 +1,1 @@
+{"vendor.pay":{"selector":"pay(address)","validator":"allowlisted-recipient"},"protocol.deposit":{"selector":"deposit(bytes32)","validator":"bounded-value"}}

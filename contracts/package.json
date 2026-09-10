@@ -6,10 +6,12 @@
     "build": "hardhat build",
     "test": "hardhat test",
     "typecheck": "tsc --noEmit",
+    "manifest": "node scripts/manifest.mjs",
+    "manifest:test": "node --test scripts/manifest.test.mjs",
     "deploy-live": "hardhat run scripts/deploy-live.ts",
     "import-proof": "hardhat run scripts/import-proof.ts",
     "live-step": "hardhat run scripts/live-step.ts",
-    "ci": "npm run build && npm run typecheck && npm test"
+    "ci": "npm run build && npm run typecheck && npm run manifest:test && npm test"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-ethers": "^4.0.15",
@@ -29,6 +31,7 @@
   "dependencies": {
     "@gluwa/asc-contracts": "^0.2.1",
     "@gluwa/usc-sdk": "^0.18.0",
+    "cbor2": "^2.3.0",
     "dotenv": "^17.4.2"
   }
 }

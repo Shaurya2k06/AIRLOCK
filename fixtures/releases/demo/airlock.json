@@ -1,0 +1,13 @@
+{
+  "orgId": "airlock-demo-org",
+  "releaseId": "airlock-demo-release",
+  "releaseVersion": 1,
+  "suiteId": "AIRLOCK_SUITE_V1",
+  "weights": "weights.bin",
+  "tokenizer": "tokenizer.json",
+  "systemPrompt": "system-prompt.txt",
+  "tools": "tools.json",
+  "container": "container.digest",
+  "sbom": "sbom.json",
+  "provenance": "provenance.json"
+}

@@ -17,6 +17,14 @@ cd ../server && npm test
 cd ../client && npm run build && npm run lint
 ```
 
+Build and verify the canonical release commitment locally:
+
+```sh
+cd contracts
+npm run manifest -- build --input ../fixtures/releases/demo --output /tmp/airlock-manifest.json
+npm run manifest -- verify --file /tmp/airlock-manifest.json --input ../fixtures/releases/demo
+```
+
 The local contract suite is intentionally deterministic. It uses fixture proof
 and receipt adapters to exercise the complete authorization and containment
 path without requiring a wallet, RPC endpoint, or proof-builder account.
@@ -44,10 +52,14 @@ not configuration inputs.
   validators, and local proof fixtures.
 - `contracts/contracts/Airlock.t.sol` — end-to-end contract scenarios,
   including proven revocation and negative actions.
+- `contracts/scripts/manifest.mjs` — canonical CBOR manifest, artifact Merkle
+  root, release digest, verification, and file proofs.
 - `contracts/scripts/deploy-live.ts` and `contracts/scripts/import-proof.ts` —
   reproducible Sepolia → Creditcoin deployment and proof submission.
-- `server/index.js` — dependency-free local control-plane API.
+- `server/index.js` — fixture/live read-only control-plane API.
 - `client/src/App.tsx` — evidence, capability, and enforcement console.
+- `docs/` — architecture, Attestcoin integration, threat model, evidence
+  template, and live demo runbook.
 
 The base-mode claim is deliberately narrow: the capability binds a release
 digest to a runtime key; it does not prove that a running process loaded those

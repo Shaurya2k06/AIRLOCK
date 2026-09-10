@@ -11,6 +11,17 @@ npm install
 npm run ci
 ```
 
+Build and verify a release commitment:
+
+```sh
+npm run manifest -- build --input ../fixtures/releases/demo --output /tmp/airlock-manifest.json
+npm run manifest -- verify --file /tmp/airlock-manifest.json --input ../fixtures/releases/demo
+npm run manifest -- prove --file /tmp/airlock-manifest.json --path tools.json
+```
+
+The manifest uses canonical CBOR, rejects symlink/path escapes, hashes sorted
+artifact leaves, and derives `releaseDigest` from the release components.
+
 The Solidity test suite uses `MockBlockProver` and `MockReceiptDecoder` only as
 local fixtures. `OfficialReceiptDecoder` wraps the pinned `@gluwa/asc-contracts`
 EVM V1 decoder, while the adapter calls Creditcoin's native BlockProver ABI.

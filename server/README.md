@@ -1,12 +1,16 @@
 # AIRLOCK local API
 
-The server is a dependency-free local control-plane fixture. It gives the
-dashboard a stable API while the live proof worker is configured later.
+The server serves a labelled local fixture when no deployment/RPC is
+configured. With `deployments.json` and `CREDITCOIN_RPC_URL`, it reads evidence
+and capability state from Creditcoin and returns `dataSource: creditcoin-chain`.
 
 ```sh
 npm test
 npm start
 ```
+
+The API never accepts a private key. It is read-only against the chain; proof
+submission and runtime signing remain separate commands under `contracts`.
 
 Endpoints:
 
