@@ -55,6 +55,9 @@ official Proof Builder for the proof, and submits it with the gas-only worker.
 `live-step` issues and executes the capability, emits revocation after the
 allowed action, and simulates the post-revocation action to prove it is
 blocked.
+Set `INTENT_FILE` to a JSON proposal with `tool: "stablecoin.transfer"`, a
+recipient, and an amount to exercise the isolated signer; it rejects recipients
+or amounts outside the deployed capability before signing.
 
 For continuous source-event discovery, run `npm run worker`. It persists a
 cursor and event journal in `worker-state.json`, retries transient proof

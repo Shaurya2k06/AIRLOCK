@@ -2,7 +2,7 @@ import "dotenv/config";
 
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { Contract, Interface, JsonRpcProvider, Wallet, id, keccak256 } from "ethers";
+import { Contract, getAddress, Interface, JsonRpcProvider, parseEther, Wallet, id, keccak256 } from "ethers";
 // @ts-expect-error The manifest CLI is intentionally plain ESM for direct Node execution.
 import { verifyManifest } from "./manifest.mjs";
 
@@ -61,12 +61,29 @@ function paymentIntent(data: string, deploymentState: any, capabilityId: string,
     };
 }
 
+async function proposedPayment(state: any): Promise<{ recipient: string; amount: string }> {
+    const proposalFile = process.env.INTENT_FILE?.trim();
+    if (!proposalFile) return { recipient: state.release.paymentRecipient, amount: state.release.paymentAmount };
+    const proposal = JSON.parse(await readFile(resolve(process.cwd(), proposalFile), "utf8"));
+    if (proposal?.tool !== "stablecoin.transfer" || typeof proposal.recipient !== "string" || typeof proposal.amount !== "string") {
+        throw new Error("INTENT_FILE must contain { tool: \"stablecoin.transfer\", recipient, amount }");
+    }
+    const recipient = getAddress(proposal.recipient);
+    const amount = parseEther(proposal.amount);
+    if (recipient !== getAddress(state.release.paymentRecipient)) throw new Error("proposal recipient is outside the approved capability");
+    if (amount <= 0n || amount > BigInt(state.release.paymentAmount)) throw new Error("proposal amount exceeds the approved capability");
+    return { recipient, amount: amount.toString() };
+}
+
 async function main() {
     const step = process.env.LIVE_STEP?.trim();
     if (!step || !["execute", "revoke", "blocked"].includes(step)) {
         throw new Error("Set LIVE_STEP=execute, revoke, or blocked");
     }
     const state = await deployment();
+    const proposal = step === "execute"
+        ? await proposedPayment(state)
+        : { recipient: state.release.paymentRecipient, amount: state.release.paymentAmount };
 
     if (step === "execute") {
         const manifest = await verifyManifest(
@@ -103,8 +120,8 @@ async function main() {
     const issuer = new Contract(state.creditcoin.issuer, issuerAbi, worker);
     const router = new Contract(state.creditcoin.router, routerAbi, worker);
     const data = new Interface(["function transfer(address recipient,uint256 amount)"]).encodeFunctionData("transfer", [
-        state.release.paymentRecipient,
-        state.release.paymentAmount,
+        proposal.recipient,
+        proposal.amount,
     ]);
 
     if (step === "execute") {

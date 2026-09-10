@@ -31,6 +31,8 @@ The same sequence can be driven by `WORKER_ONCE=true npm run worker` for a
 single source scan, or `npm run worker` for polling/retry behavior.
 The deployed vault holds the demo `MockStablecoin` for the vendor payment and
 native test value only for the bounded deposit action.
+The signer accepts only the typed `stablecoin.transfer` proposal shape; it
+never accepts a caller-supplied target, selector, or raw calldata.
 
 ## Negative cases to show
 
