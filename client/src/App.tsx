@@ -124,6 +124,46 @@ function DemoPage({ onHome }: { onHome: () => void }) {
     return null
   }, [simulation, simulationReason])
 
+  const waitForRunbookStep = async (step: RunbookStep, beforeOverview: Overview | null, headers: Record<string, string>): Promise<{ ok: boolean; message: string; runbook?: Runbook }> => {
+    const startedAt = Date.now()
+    const proofEvidence: Record<string, string> = {
+      'proof-artifact': 'Artifact',
+      'proof-evaluation': 'Evaluation',
+      'proof-approval': 'Approval',
+      'proof-status': 'Active status',
+      'proof-revocation': 'Active status',
+    }
+    while (Date.now() - startedAt < 15 * 60 * 1000) {
+      await new Promise((resolve) => window.setTimeout(resolve, 3000))
+      try {
+        const [runbookResponse, overviewResponse] = await Promise.all([
+          fetch(`${API_URL}/api/runbook`, { headers }),
+          fetch(`${API_URL}/api/overview`, { headers }),
+        ])
+        const nextRunbook = runbookResponse.ok ? await runbookResponse.json() as Runbook : undefined
+        const nextOverview = overviewResponse.ok ? await overviewResponse.json() as Overview : undefined
+        if (nextRunbook) setRunbook(nextRunbook)
+        if (nextOverview) setOverview(nextOverview)
+        const nextStep = nextRunbook?.steps.find((item) => item.id === step.id)
+        const evidenceKind = proofEvidence[step.id]
+        const evidenceDone = evidenceKind && nextOverview?.evidence.some((item) => item.kind === evidenceKind && (item.status === 'PROVEN' || (step.id === 'proof-revocation' && item.status === 'REVOKED')))
+        const chainStateChanged = beforeOverview && nextOverview && (
+          (step.id === 'deploy' && beforeOverview.release.digest !== nextOverview.release.digest)
+          || (step.id === 'execute' && beforeOverview.capability.status !== 'ACTIVE' && nextOverview.capability.status === 'ACTIVE')
+          || (step.id === 'deposit' && nextOverview.actions.length > beforeOverview.actions.length)
+          || (step.id === 'revoke' && beforeOverview.release.status !== 'REVOKED' && nextOverview.release.status === 'REVOKED')
+          || (step.id === 'proof-revocation' && nextOverview.release.status === 'REVOKED')
+        )
+        if ((nextStep?.status === 'COMPLETE' && step.status !== 'COMPLETE') || evidenceDone || chainStateChanged) {
+          return { ok: true, message: `${step.label} complete`, runbook: nextRunbook }
+        }
+      } catch {
+        // Keep polling while the control-plane request is still running.
+      }
+    }
+    return { ok: false, message: `${step.label} is still running on the control plane; refresh Runbook to check its status` }
+  }
+
   const executeRunbook = async (step: RunbookStep): Promise<{ ok: boolean; message: string; runbook?: Runbook }> => {
     if (step.requiresWrite && !window.confirm(`Run ${step.label}? This may send a real testnet transaction.`)) return { ok: false, message: 'action cancelled' }
     const operatorToken = step.requiresWrite && runbook?.writeAuthRequired && !writeToken
@@ -137,6 +177,7 @@ function DemoPage({ onHome }: { onHome: () => void }) {
     if (operatorToken && operatorToken !== writeToken) setWriteToken(operatorToken)
     setRunbookRunning(step.id)
     setRunbookMessage('')
+    const beforeOverview = overview
     try {
       const headers: Record<string, string> = { 'content-type': 'application/json' }
       if (operatorToken) headers.authorization = `Bearer ${operatorToken}`
@@ -153,9 +194,11 @@ function DemoPage({ onHome }: { onHome: () => void }) {
       }
       return { ok: Boolean(result.ok && response.ok), message, runbook: result.runbook }
     } catch {
-      const message = 'control plane unavailable; no terminal action was started'
+      setRunbookMessage(`${step.label} is running on the control plane…`)
+      const recovered = await waitForRunbookStep(step, beforeOverview, operatorToken ? { authorization: `Bearer ${operatorToken}` } : {})
+      const message = recovered.message
       setRunbookMessage(message)
-      return { ok: false, message }
+      return recovered
     } finally {
       setRunbookRunning('')
     }
