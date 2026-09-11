@@ -48,9 +48,11 @@ test('AIRLOCK credential signs and verifies as EIP-712', async () => {
 
 test('delegation can only attenuate a parent credential', () => {
   const parent = sample(Wallet.createRandom().address, Wallet.createRandom().address)
-  const child = attenuateCredential(parent, { budget: '2', maxCalls: 1, allowedTools: ['vendor.pay'], expiresAt: 500 })
+  const child = attenuateCredential(parent, { budget: '2', maxCalls: 1, allowedTools: ['vendor.pay'], expiresAt: 500, taskId: id('task-child'), contextId: id('context-child') })
   assert.equal(child.parentCapabilityId, parent.capabilityId)
   assert.equal(child.delegationDepth, '1')
+  assert.equal(child.taskId, id('task-child'))
+  assert.equal(child.contextId, id('context-child'))
   assert.throws(() => attenuateCredential(parent, { budget: '1000000000000000001' }), /budget exceeds parent/)
 })
 
@@ -72,6 +74,9 @@ test('MCP gateway exposes and executes only credential-scoped tools', async () =
   assert.equal(denied.result.structuredContent.decision, 'DENY')
   const allowed = await gateway({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'vendor.pay', arguments: { recipient: '0x0000000000000000000000000000000000000002', amount: '0.1' } } })
   assert.equal(allowed.result.structuredContent.decision, 'ALLOW')
+  const stepUp = await gateway({ jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'vendor.pay', arguments: { recipient: '0x0000000000000000000000000000000000000002', amount: '0.6' } } })
+  assert.equal(stepUp.result.structuredContent.decision, 'AUTH_REQUIRED')
+  assert.equal(stepUp.result.structuredContent.code, 'STEP_UP_REQUIRED')
 })
 
 test('MCP gateway rejects calls outside credential budget or call limit', async () => {

@@ -16,7 +16,7 @@ const {
   normalizeCredential,
   attenuateCredential,
 } = require('./credential')
-const { createMcpGateway, toolDefinitions, jsonRpcError, validateArguments } = require('./mcp-gateway')
+const { createMcpGateway, toolDefinitions, jsonRpcError, validateArguments, authorizationRequirement } = require('./mcp-gateway')
 const { agentCard, handleTask } = require('./a2a')
 const { parsePaymentHeader, validatePayment, paymentRequired, settlePayment } = require('./x402')
 const { readIdentity } = require('./erc8004')
@@ -131,6 +131,8 @@ async function issueCredential(request, deployment, current) {
     capabilityId: deployment.live.capabilityId,
     parentCapabilityId: ZERO_BYTES32,
     parentCredentialId: ZERO_BYTES32,
+    taskId: ZERO_BYTES32,
+    contextId: ZERO_BYTES32,
     scopeRoot: deployment.release.scopeRoot,
     budget: (onChainCapability.spendCap - onChainCapability.spent).toString(),
     maxCalls: Math.max(0, Number(onChainCapability.callCap) - Number(onChainCapability.callsUsed)),
@@ -242,6 +244,8 @@ async function issueDelegatedCredential(request, deployment, current, payload) {
   const provider = new JsonRpcProvider(process.env.CREDITCOIN_RPC_URL)
   const issuer = new Wallet(privateKey, provider)
   if (issuer.address.toLowerCase() !== parent.credential.issuer.toLowerCase()) throw credentialFailure('parent credential issuer is not this deployment issuer')
+  const taskId = delegationTaskId(payload.taskId)
+  const contextId = delegationTaskId(payload.contextId || taskId)
   const child = attenuateCredential(parent.credential, {
     capabilityId: payload.capabilityId || keccak256(randomBytes(32)),
     agentId: payload.agentId || parent.credential.agentId,
@@ -254,11 +258,12 @@ async function issueDelegatedCredential(request, deployment, current, payload) {
     riskLevel: payload.riskLevel ?? parent.credential.riskLevel,
     maxDelegationDepth: payload.maxDelegationDepth ?? parent.credential.maxDelegationDepth,
     delegationLimit: payload.delegationLimit ?? parent.credential.delegationLimit,
+    taskId,
+    contextId,
   })
   if (BigInt(child.budget) > (1n << 128n) - 1n) throw credentialFailure('delegated budget exceeds on-chain uint128', 400)
   const signer = new Wallet(policyKey, provider)
   const registry = new Contract(deployment.creditcoin.delegationRegistry, delegationAbi, signer)
-  const taskId = delegationTaskId(payload.taskId)
   const scope = scopeForTools(deployment, child.allowedTools)
   const transaction = await registry.register(
     child.capabilityId,
@@ -588,10 +593,8 @@ async function authorizeProtocolAction(action, credential) {
   if (!(credential.allowedTools || []).includes(action.tool)) return { decision: 'DENY', reason: 'tool is outside the credential scope' }
   const checked = validateArguments(action.tool, action.arguments || {}, current, credential)
   if (!checked.ok) return { decision: 'DENY', reason: checked.reason }
-  const amount = Number(action.arguments?.amount || 0)
-  if (action.tool === 'vendor.pay' && amount > current.policy.maxPayment / 2 && Number(credential.riskLevel || 0) < 1) {
-    return { decision: 'AUTH_REQUIRED', reason: 'payment requires step-up authorization' }
-  }
+  const requirement = authorizationRequirement(action.tool, checked.args, current, credential)
+  if (requirement) return requirement
   return { decision: 'ALLOW', step: tool.runbookStep, args: checked.args }
 }
 
@@ -755,6 +758,10 @@ const server = http.createServer(async (request, response) => {
     }
     return
   }
+  if (request.method === 'GET' && url.pathname === '/mcp' && request.headers.accept?.includes('text/event-stream')) {
+    mcpGateway.subscribe(response)
+    return
+  }
   if (request.method === 'POST' && url.pathname === '/mcp') {
     try {
       const payload = await body(request)
@@ -869,6 +876,7 @@ const server = http.createServer(async (request, response) => {
       activeRunbookJob = true
       const result = await executeRunbookStep(step)
       activeRunbookJob = false
+      mcpGateway.notifyToolsChanged()
       json(response, result.ok ? 200 : 400, { ...result, runbook: runbook(await readDeployment()) })
     } catch (error) {
       activeRunbookJob = false

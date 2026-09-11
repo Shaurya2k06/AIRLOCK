@@ -13,8 +13,8 @@ same Creditcoin capability and do not bypass the existing router.
 
 The credential is EIP-712 typed, bound to the Creditcoin router, target chain,
 MCP audience, release digest, policy hash, runtime key, scope root, budgets,
-validity window, evidence root, and trace root. The server accepts EOA EIP-712
-signatures and ERC-1271 contract validation. A child credential can only reduce
+validity window, evidence root, trace root, and optional A2A task/context IDs.
+The server accepts EOA EIP-712 signatures and ERC-1271 contract validation. A child credential can only reduce
 budget, calls, tools, risk, and lifetime.
 
 Never put the returned header in logs:
@@ -38,7 +38,10 @@ revoking a parent makes descendants inactive on the next action.
 `ping`. `tools/list` only returns tools present in the credential. `tools/call`
 revalidates release status, recipient, amount, tool scope, remaining credential
 budget/calls, and the live capability before invoking the existing allowlisted
-runbook path.
+runbook path. Low-risk calls return `ALLOW`; high-value payments without the
+required risk level return structured `AUTH_REQUIRED`; prohibited calls return
+`DENY`. `GET /mcp` with `Accept: text/event-stream` emits
+`notifications/tools/list_changed` when release or capability state changes.
 
 The gateway also serves `/.well-known/oauth-protected-resource` for resource
 metadata. OAuth authorization is intentionally deployment-owned; AIRLOCK does
