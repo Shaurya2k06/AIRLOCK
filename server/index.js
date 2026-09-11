@@ -26,6 +26,7 @@ const fixtureState = {
     { kind: 'Active status', status: 'FIXTURE', detail: 'Checkpoint #184' },
   ],
   capability: { status: 'FIXTURE', spendCap: 350, spent: 130, callCap: 4, callsUsed: 2, runtimeKey: '0x8B31…6A14', scopeRoot: 'fixture', expiresAt: '08:41 UTC' },
+  freshness: { maxAgeSeconds: 600, ageSeconds: 0, remainingSeconds: 600, statusIssuedAt: '—', statusValidUntil: '08:41 UTC' },
   policy: { recipient: '0x4E…91c2', maxPayment: 250, depositMax: 100 },
   actions: [
     { action: 'vendor.pay', target: '0x4E…91c2', amount: 24, state: 'Fixture allowed', age: '2m ago' },
@@ -43,6 +44,9 @@ const evidenceAbi = [
 ]
 const issuerAbi = [
   'function get(bytes32) view returns (tuple(bytes32 orgId,bytes32 agentId,bytes32 releaseDigest,bytes32 policyHash,bytes32 scopeRoot,address runtimeKey,uint128 spendCap,uint128 spent,uint128 perCallValueCap,uint32 callCap,uint32 callsUsed,uint64 notBefore,uint64 expiresAt,uint64 epoch,bool revoked))',
+]
+const policyAbi = [
+  'function get(bytes32) view returns (tuple(bool exists,bool paused,bytes32 approvedSuiteHash,bytes32 approvedEvaluatorSetHash,bytes32 allowedToolScopeRoot,uint32 minSafetyScoreBps,uint256 deniedCapabilityBitmap,uint128 spendCeiling,uint128 perCallCeiling,uint32 callCeiling,uint64 capabilityTtl,uint64 statusFreshness,bool teeRequired))',
 ]
 
 function json(res, status, payload) {
@@ -67,6 +71,17 @@ function timestamp(value) {
   return Number.isNaN(date.getTime()) ? '—' : date.toISOString()
 }
 
+function statusFreshness(statusIssuedAt, statusValidUntil, maxAgeSeconds, active, nowSeconds = Math.floor(Date.now() / 1000)) {
+  const ageSeconds = Math.max(0, nowSeconds - Number(statusIssuedAt))
+  return {
+    maxAgeSeconds: Number(maxAgeSeconds),
+    ageSeconds,
+    remainingSeconds: active ? Math.max(0, Number(maxAgeSeconds) - ageSeconds) : 0,
+    statusIssuedAt: timestamp(statusIssuedAt),
+    statusValidUntil: timestamp(statusValidUntil),
+  }
+}
+
 async function readDeployment() {
   try {
     return JSON.parse(await fs.readFile(deploymentsFile, 'utf8'))
@@ -86,12 +101,14 @@ async function liveOverview(deployment) {
   }
   const contract = new Contract(deployment.creditcoin.evidence, evidenceAbi, provider)
   const key = await contract.releaseKey(deployment.release.orgId, deployment.release.releaseDigest)
+  const policies = new Contract(deployment.creditcoin.policies, policyAbi, provider)
   const [artifact, evaluation, approval, status] = await Promise.all([
     contract.getArtifact(key),
     contract.getEvaluation(key),
     contract.getApproval(key),
     contract.getStatus(key),
   ])
+  const policy = await policies.get(deployment.release.policyHash)
   const capabilityId = deployment.live && deployment.live.capabilityId
   let capability = { status: 'NO ACTIVE CAPABILITY', spendCap: 0, spent: 0, callCap: 0, callsUsed: 0, runtimeKey: short(deployment.release.runtimeKey), scopeRoot: '—', expiresAt: '—' }
   if (capabilityId) {
@@ -112,6 +129,7 @@ async function liveOverview(deployment) {
     }
   }
   const releaseStatus = status.revoked ? 'REVOKED' : status.status === 1n || status.status === 1 ? 'ACTIVE' : 'PENDING'
+  const statusFreshnessSeconds = Number(policy.statusFreshness)
   const recipient = deployment.release.paymentRecipient
   const proof = (kind) => deployment.proofs?.[kind] || {}
   const artifactProof = proof('artifact')
@@ -144,6 +162,7 @@ async function liveOverview(deployment) {
       { ...approvalProof, kind: 'Approval', status: approval.exists ? 'PROVEN' : 'PENDING', detail: `Runtime key · ${short(approval.runtimeKey)}` },
       { ...statusProof, kind: 'Active status', status: status.exists ? (status.revoked ? 'REVOKED' : 'PROVEN') : 'PENDING', detail: status.revoked ? `Revoked · ${short(status.reasonHash)}` : `Checkpoint #${status.statusNonce}` },
     ],
+    freshness: statusFreshness(status.issuedAt, status.validUntil, statusFreshnessSeconds, releaseStatus === 'ACTIVE'),
     capability,
     policy: {
       recipient,
@@ -348,4 +367,4 @@ const server = http.createServer(async (request, response) => {
 
 if (require.main === module) server.listen(port, host, () => console.log(`AIRLOCK API listening on http://${host}:${port}`))
 
-module.exports = { server, simulate, state: fixtureState, overview, runbook, timestamp }
+module.exports = { server, simulate, state: fixtureState, overview, runbook, statusFreshness, timestamp }

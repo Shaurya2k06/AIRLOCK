@@ -1,6 +1,6 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { simulate, runbook, timestamp } = require('./index')
+const { simulate, runbook, statusFreshness, timestamp } = require('./index')
 
 test('simulation blocks unapproved recipients and accepts bounded payments', () => {
   assert.deepEqual(simulate({ recipient: '0xnope', amount: 24 }).allowed, false)
@@ -34,4 +34,15 @@ test('runbook exposes the complete terminal workflow without secrets', () => {
   assert.equal(value.steps.find((step) => step.id === 'proof-artifact').status, 'COMPLETE')
   assert.equal(value.steps.find((step) => step.id === 'execute').status, 'COMPLETE')
   assert.equal(value.steps.some((step) => JSON.stringify(step).includes('PRIVATE_KEY')), false)
+})
+
+test('status freshness reports remaining active window and closes after revocation', () => {
+  assert.deepEqual(statusFreshness(1000, 2000, 600, true, 1300), {
+    maxAgeSeconds: 600,
+    ageSeconds: 300,
+    remainingSeconds: 300,
+    statusIssuedAt: '1970-01-01T00:16:40.000Z',
+    statusValidUntil: '1970-01-01T00:33:20.000Z',
+  })
+  assert.equal(statusFreshness(1000, 2n ** 64n - 1n, 600, false, 1300).remainingSeconds, 0)
 })
