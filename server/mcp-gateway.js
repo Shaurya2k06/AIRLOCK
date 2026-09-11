@@ -1,6 +1,17 @@
 const { getAddress, isAddress, parseEther } = require('ethers')
 
 const MCP_PROTOCOL_VERSION = '2026-07-28'
+const MCP_COMPATIBLE_PROTOCOL_VERSIONS = new Set([
+  MCP_PROTOCOL_VERSION,
+  '2025-11-25',
+  '2025-06-18',
+  '2025-03-26',
+  '2024-11-05',
+])
+
+function negotiateProtocolVersion(requested) {
+  return MCP_COMPATIBLE_PROTOCOL_VERSIONS.has(requested) ? requested : MCP_PROTOCOL_VERSION
+}
 
 const toolDefinitions = {
   'vendor.pay': {
@@ -126,7 +137,7 @@ function createMcpGateway({ getOverview, getCredential, execute }) {
 
     if (method === 'initialize') {
       return jsonRpcResult(id, {
-        protocolVersion: MCP_PROTOCOL_VERSION,
+        protocolVersion: negotiateProtocolVersion(request.params?.protocolVersion),
         capabilities: { tools: { listChanged: true }, tasks: { requests: { tools: { call: {} } } } },
         serverInfo: { name: 'AIRLOCK MCP Gateway', version: '1.0.0' },
         instructions: 'AIRLOCK filters tool discovery and revalidates every call against the current release capability.',

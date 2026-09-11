@@ -79,6 +79,14 @@ test('MCP gateway exposes and executes only credential-scoped tools', async () =
   assert.equal(stepUp.result.structuredContent.code, 'STEP_UP_REQUIRED')
 })
 
+test('MCP gateway negotiates protocol versions used by existing clients', async () => {
+  const gateway = createMcpGateway({ getOverview: async () => ({}), getCredential: async () => null, execute: async () => ({ ok: true }) })
+  const compatible = await gateway({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18' } })
+  assert.equal(compatible.result.protocolVersion, '2025-06-18')
+  const unknown = await gateway({ jsonrpc: '2.0', id: 2, method: 'initialize', params: { protocolVersion: 'future-version' } })
+  assert.equal(unknown.result.protocolVersion, '2026-07-28')
+})
+
 test('MCP gateway rejects calls outside credential budget or call limit', async () => {
   const credential = sample(Wallet.createRandom().address, Wallet.createRandom().address)
   const overview = {
