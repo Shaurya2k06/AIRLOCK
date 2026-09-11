@@ -1636,8 +1636,9 @@ interface ICapabilityIssuerState {
 }
 
 /// @notice On-chain parent/child capability graph for bounded multi-agent delegation.
-/// @dev Child scope roots must equal the parent root until a richer subset proof is registered.
-///      Parent state is checked on every read, so revoking a parent cascades immediately.
+/// @dev Child roots stay anchored to the parent tree while an explicit, proven
+///      scope-leaf allowlist narrows what the child can execute. Parent state is
+///      checked on every read, so revoking a parent cascades immediately.
 contract CapabilityDelegationRegistry is RoleAddress {
     error MissingParent();
     error InvalidDelegation();
@@ -1647,6 +1648,7 @@ contract CapabilityDelegationRegistry is RoleAddress {
     error RouterAlreadySet();
     error BudgetExceeded();
     error PausedDelegation();
+    error InvalidScope();
 
     struct Delegation {
         bool exists;
@@ -1670,6 +1672,7 @@ contract CapabilityDelegationRegistry is RoleAddress {
     address public immutable guardian;
     address public router;
     mapping(bytes32 => Delegation) private _delegations;
+    mapping(bytes32 => mapping(bytes32 => bool)) private _scopeLeaves;
 
     event DelegationRegistered(
         bytes32 indexed childCapabilityId,
@@ -1708,7 +1711,9 @@ contract CapabilityDelegationRegistry is RoleAddress {
         uint64 validAfter,
         uint64 validUntil,
         uint8 depth,
-        bytes32 taskId
+        bytes32 taskId,
+        bytes32[] calldata scopeLeaves,
+        bytes32[][] calldata scopeProofs
     ) external onlyRole {
         if (_delegations[childCapabilityId].exists) revert DuplicateDelegation();
         if (childCapabilityId == bytes32(0) || parentCapabilityId == bytes32(0) || runtimeKey == address(0)) {
@@ -1728,6 +1733,14 @@ contract CapabilityDelegationRegistry is RoleAddress {
         uint64 parentNotBefore = parentIsDelegation ? parentDelegation.validAfter : parent.notBefore;
         uint64 parentExpiry = parentIsDelegation ? parentDelegation.validUntil : parent.expiresAt;
         uint8 parentDepth = parentIsDelegation ? parentDelegation.depth : 0;
+        if (scopeLeaves.length == 0 || scopeLeaves.length != scopeProofs.length || scopeLeaves.length > 32) {
+            revert InvalidScope();
+        }
+        for (uint256 i; i < scopeLeaves.length; ++i) {
+            if (scopeLeaves[i] == bytes32(0) || !ScopeProof.verify(parentScope, scopeLeaves[i], scopeProofs[i])) {
+                revert InvalidScope();
+            }
+        }
         if (
             scopeRoot != parentScope
                 || budget > parentBudget
@@ -1756,6 +1769,9 @@ contract CapabilityDelegationRegistry is RoleAddress {
             depth: depth,
             taskId: taskId
         });
+        for (uint256 i; i < scopeLeaves.length; ++i) {
+            _scopeLeaves[childCapabilityId][scopeLeaves[i]] = true;
+        }
         emit DelegationRegistered(
             childCapabilityId,
             parentCapabilityId,
@@ -1782,6 +1798,10 @@ contract CapabilityDelegationRegistry is RoleAddress {
 
     function get(bytes32 childCapabilityId) external view returns (Delegation memory) {
         return _delegations[childCapabilityId];
+    }
+
+    function allowsScope(bytes32 childCapabilityId, bytes32 scopeLeaf) external view returns (bool) {
+        return _scopeLeaves[childCapabilityId][scopeLeaf];
     }
 
     function consume(bytes32 childCapabilityId, uint256 value)
@@ -2025,6 +2045,7 @@ contract ToolRouter is RoleAddress {
             revert InvalidIntent();
         }
         if (!ScopeProof.verify(scopeRoot, intent.scopeLeaf, intent.scopeProof)) revert UnsupportedAction();
+        if (delegated && !delegation.allowsScope(intent.capabilityId, intent.scopeLeaf)) revert UnsupportedAction();
 
         ActionRule memory action = actions[intent.scopeLeaf];
         if (!action.exists || action.target != intent.target || action.selector != intent.functionSelector) {

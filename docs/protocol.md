@@ -28,8 +28,9 @@ active live capability. A revoked or expired release cannot mint a credential.
 
 `POST /api/credentials/delegate` registers an attenuated child in the on-chain
 `CapabilityDelegationRegistry` before returning its signed credential. The
-router consumes child budget and calls through the parent chain, so revoking a
-parent makes descendants inactive on the next action.
+registry stores proven scope leaves as well as budget, calls, lifetime, and
+depth. The router consumes child budget and calls through the parent chain, so
+revoking a parent makes descendants inactive on the next action.
 
 ## MCP
 

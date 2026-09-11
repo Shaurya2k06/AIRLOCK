@@ -51,7 +51,8 @@ const policyAbi = [
 const delegationAbi = [
   'function isActive(bytes32) view returns (bool)',
   'function get(bytes32) view returns (tuple(bool exists,bool revoked,bytes32 childCapabilityId,bytes32 parentCapabilityId,bytes32 childAgentId,bytes32 scopeRoot,address runtimeKey,uint128 budget,uint128 spent,uint32 maxCalls,uint32 callsUsed,uint64 validAfter,uint64 validUntil,uint8 depth,bytes32 taskId))',
-  'function register(bytes32 childCapabilityId,bytes32 parentCapabilityId,bytes32 childAgentId,bytes32 scopeRoot,address runtimeKey,uint128 budget,uint32 maxCalls,uint64 validAfter,uint64 validUntil,uint8 depth,bytes32 taskId)',
+  'function allowsScope(bytes32 childCapabilityId,bytes32 scopeLeaf) view returns (bool)',
+  'function register(bytes32 childCapabilityId,bytes32 parentCapabilityId,bytes32 childAgentId,bytes32 scopeRoot,address runtimeKey,uint128 budget,uint32 maxCalls,uint64 validAfter,uint64 validUntil,uint8 depth,bytes32 taskId,bytes32[] scopeLeaves,bytes32[][] scopeProofs)',
 ]
 
 function json(res, status, payload, extraHeaders = {}) {
@@ -193,6 +194,9 @@ async function verifyCredentialBundle(bundle, request, deployment, current) {
     if (state.scopeRoot.toLowerCase() !== credential.scopeRoot.toLowerCase() || state.runtimeKey.toLowerCase() !== credential.runtimeKey.toLowerCase()) throw credentialFailure('delegated scope or runtime mismatch')
     if (BigInt(credential.budget) > BigInt(state.budget) || Number(credential.maxCalls) > Number(state.maxCalls)) throw credentialFailure('delegated budget exceeds on-chain delegation')
     if (BigInt(credential.notBefore) < BigInt(state.validAfter) || BigInt(credential.expiresAt) > BigInt(state.validUntil) || Number(credential.delegationDepth) !== Number(state.depth)) throw credentialFailure('delegated validity exceeds on-chain delegation')
+    const scope = scopeForTools(deployment, credential.allowedTools)
+    const scopeAllowed = await Promise.all(scope.leaves.map((leaf) => registry.allowsScope(credential.capabilityId, leaf)))
+    if (scopeAllowed.some((allowed) => !allowed)) throw credentialFailure('delegated tool scope exceeds on-chain delegation')
   }
   const now = Math.floor(Date.now() / 1000)
   if (now < Number(credential.notBefore) || now >= Number(credential.expiresAt)) throw credentialFailure('credential is outside its validity window', 401)
@@ -209,6 +213,21 @@ async function verifyRequestCredential(request, deployment, current) {
 function delegationTaskId(value) {
   if (typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value)) return value.toLowerCase()
   return keccak256(toUtf8Bytes(String(value || `AIRLOCK_TASK:${Date.now()}:${randomBytes(8).toString('hex')}`)))
+}
+
+function scopeForTools(deployment, tools) {
+  const leaves = []
+  const proofs = []
+  for (const tool of tools || []) {
+    const leaf = tool === 'vendor.pay' ? deployment.release.paymentLeaf : tool === 'protocol.deposit' ? deployment.release.depositLeaf : null
+    if (!leaf) throw credentialFailure(`tool scope is not registered: ${tool}`)
+    const sibling = tool === 'vendor.pay' ? deployment.release.depositLeaf : deployment.release.paymentLeaf
+    if (!sibling) throw credentialFailure('deployment scope proofs are unavailable', 503)
+    leaves.push(leaf)
+    proofs.push([sibling])
+  }
+  if (!leaves.length) throw credentialFailure('delegated credential must retain at least one tool')
+  return { leaves, proofs }
 }
 
 async function issueDelegatedCredential(request, deployment, current, payload) {
@@ -239,6 +258,7 @@ async function issueDelegatedCredential(request, deployment, current, payload) {
   const signer = new Wallet(policyKey, provider)
   const registry = new Contract(deployment.creditcoin.delegationRegistry, delegationAbi, signer)
   const taskId = delegationTaskId(payload.taskId)
+  const scope = scopeForTools(deployment, child.allowedTools)
   const transaction = await registry.register(
     child.capabilityId,
     child.parentCapabilityId,
@@ -251,6 +271,8 @@ async function issueDelegatedCredential(request, deployment, current, payload) {
     BigInt(child.expiresAt),
     Number(child.delegationDepth),
     taskId,
+    scope.leaves,
+    scope.proofs,
   )
   await transaction.wait()
   const signed = await signCredential(child, issuer, credentialDomain({ chainId: Number(deployment.creditcoin.chainId), verifyingContract: deployment.creditcoin.router }))
@@ -260,6 +282,7 @@ async function issueDelegatedCredential(request, deployment, current, payload) {
   next.delegations = [...(deployment.delegations || []), {
     childCapabilityId: child.capabilityId,
     parentCapabilityId: child.parentCapabilityId,
+    scopeLeaves: scope.leaves,
     taskId,
     txHash: transaction.hash,
   }]

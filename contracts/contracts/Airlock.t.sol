@@ -319,6 +319,11 @@ contract AirlockTest is Test {
 
     function test_DelegationIsAttenuatedAndParentRevocationCascades() public {
         bytes32 childId = keccak256("child-capability");
+        bytes32[] memory childLeaves = new bytes32[](1);
+        childLeaves[0] = paymentLeaf;
+        bytes32[][] memory childProofs = new bytes32[][](1);
+        childProofs[0] = new bytes32[](1);
+        childProofs[0][0] = depositLeaf;
         vm.prank(admin);
         delegation.register(
             childId,
@@ -331,9 +336,13 @@ contract AirlockTest is Test {
             uint64(block.timestamp),
             uint64(block.timestamp + 300),
             1,
-            keccak256("a2a-task")
+            keccak256("a2a-task"),
+            childLeaves,
+            childProofs
         );
         assertTrue(delegation.isActive(childId));
+        assertTrue(delegation.allowsScope(childId, paymentLeaf));
+        assertFalse(delegation.allowsScope(childId, depositLeaf));
 
         vm.prank(guardian);
         issuer.revoke(capabilityId);
