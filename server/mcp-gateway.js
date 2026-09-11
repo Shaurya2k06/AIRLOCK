@@ -1,4 +1,4 @@
-const { getAddress, isAddress } = require('ethers')
+const { getAddress, isAddress, parseEther } = require('ethers')
 
 const MCP_PROTOCOL_VERSION = '2026-07-28'
 
@@ -52,7 +52,8 @@ function authorizedTools(credential, overview) {
   })
 }
 
-function validateArguments(name, args, overview) {
+function validateArguments(name, args, overview, credential) {
+  if (credential && Number(credential.maxCalls) < 1) return { ok: false, code: 'CALL_LIMIT_REACHED', reason: 'credential has no calls remaining' }
   if (name === 'vendor.pay') {
     if (!isAddress(args?.recipient)) return { ok: false, code: 'INVALID_RECIPIENT', reason: 'recipient must be an EVM address' }
     const recipient = getAddress(args.recipient)
@@ -60,9 +61,15 @@ function validateArguments(name, args, overview) {
     const amount = Number(args.amount)
     if (!Number.isFinite(amount) || amount <= 0) return { ok: false, code: 'INVALID_AMOUNT', reason: 'amount must be positive' }
     if (amount > overview.policy.maxPayment) return { ok: false, code: 'BUDGET_EXCEEDED', reason: 'amount exceeds the per-call capability ceiling' }
+    if (credential && parseEther(String(args.amount)) > BigInt(credential.budget)) return { ok: false, code: 'BUDGET_EXCEEDED', reason: 'amount exceeds the credential budget' }
     return { ok: true, args: { recipient, amount: String(args.amount) } }
   }
-  if (name === 'protocol.deposit') return { ok: true, args: {} }
+  if (name === 'protocol.deposit') {
+    if (credential && overview.policy.depositMax !== undefined && parseEther(String(overview.policy.depositMax)) > BigInt(credential.budget)) {
+      return { ok: false, code: 'BUDGET_EXCEEDED', reason: 'deposit exceeds the credential budget' }
+    }
+    return { ok: true, args: {} }
+  }
   return { ok: false, code: 'UNKNOWN_TOOL', reason: 'tool is not registered' }
 }
 
@@ -96,7 +103,7 @@ function createMcpGateway({ getOverview, getCredential, execute }) {
     if (!tool || !authorizedTools(credential, overview).some((item) => item.name === name)) {
       return jsonRpcResult(id, denial('TOOL_NOT_AUTHORIZED', 'tool is not authorized by the current capability'))
     }
-    const checked = validateArguments(name, request.params?.arguments || {}, overview)
+    const checked = validateArguments(name, request.params?.arguments || {}, overview, credential)
     if (!checked.ok) return jsonRpcResult(id, denial(checked.code, checked.reason))
     if (tool.riskLevel > Number(credential.riskLevel || 0)) {
       return jsonRpcResult(id, { isError: true, content: [{ type: 'text', text: 'additional authorization required' }], structuredContent: { decision: 'AUTH_REQUIRED', code: 'STEP_UP_REQUIRED', reason: 'tool risk exceeds the credential risk level', requestedTool: name } })

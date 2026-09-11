@@ -35,8 +35,9 @@ parent makes descendants inactive on the next action.
 
 `POST /mcp` implements JSON-RPC `initialize`, `tools/list`, `tools/call`, and
 `ping`. `tools/list` only returns tools present in the credential. `tools/call`
-revalidates release status, recipient, amount, tool scope, and the live
-capability before invoking the existing allowlisted runbook path.
+revalidates release status, recipient, amount, tool scope, remaining credential
+budget/calls, and the live capability before invoking the existing allowlisted
+runbook path.
 
 The gateway also serves `/.well-known/oauth-protected-resource` for resource
 metadata. OAuth authorization is intentionally deployment-owned; AIRLOCK does

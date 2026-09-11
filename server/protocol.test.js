@@ -20,7 +20,7 @@ const sample = (issuer, runtimeKey) => normalizeCredential({
   releaseDigest: id('release'),
   capabilityId: id('capability'),
   scopeRoot: id('scope'),
-  budget: '10000000000000000',
+  budget: '1000000000000000000',
   maxCalls: 2,
   notBefore: 1,
   expiresAt: 1000,
@@ -51,7 +51,7 @@ test('delegation can only attenuate a parent credential', () => {
   const child = attenuateCredential(parent, { budget: '2', maxCalls: 1, allowedTools: ['vendor.pay'], expiresAt: 500 })
   assert.equal(child.parentCapabilityId, parent.capabilityId)
   assert.equal(child.delegationDepth, '1')
-  assert.throws(() => attenuateCredential(parent, { budget: '10000000000000001' }), /budget exceeds parent/)
+  assert.throws(() => attenuateCredential(parent, { budget: '1000000000000000001' }), /budget exceeds parent/)
 })
 
 test('MCP gateway exposes and executes only credential-scoped tools', async () => {
@@ -59,7 +59,7 @@ test('MCP gateway exposes and executes only credential-scoped tools', async () =
   const overview = {
     release: { status: 'ACTIVE' },
     capability: { status: 'ACTIVE' },
-    policy: { recipient: '0x0000000000000000000000000000000000000002', maxPayment: 1 },
+    policy: { recipient: '0x0000000000000000000000000000000000000002', maxPayment: 1, depositMax: 0.1 },
   }
   const gateway = createMcpGateway({
     getOverview: async () => overview,
@@ -72,6 +72,21 @@ test('MCP gateway exposes and executes only credential-scoped tools', async () =
   assert.equal(denied.result.structuredContent.decision, 'DENY')
   const allowed = await gateway({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'vendor.pay', arguments: { recipient: '0x0000000000000000000000000000000000000002', amount: '0.1' } } })
   assert.equal(allowed.result.structuredContent.decision, 'ALLOW')
+})
+
+test('MCP gateway rejects calls outside credential budget or call limit', async () => {
+  const credential = sample(Wallet.createRandom().address, Wallet.createRandom().address)
+  const overview = {
+    release: { status: 'ACTIVE' },
+    capability: { status: 'ACTIVE' },
+    policy: { recipient: '0x0000000000000000000000000000000000000002', maxPayment: 1, depositMax: 0.1 },
+  }
+  const gateway = createMcpGateway({ getOverview: async () => overview, getCredential: async () => ({ ...credential, budget: '50000000000000000', maxCalls: '1' }), execute: async () => ({ ok: true }) })
+  const overBudget = await gateway({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'vendor.pay', arguments: { recipient: overview.policy.recipient, amount: '0.1' } } })
+  assert.equal(overBudget.result.structuredContent.code, 'BUDGET_EXCEEDED')
+  const noCallsGateway = createMcpGateway({ getOverview: async () => overview, getCredential: async () => ({ ...credential, budget: '50000000000000000', maxCalls: '0' }), execute: async () => ({ ok: true }) })
+  const noCalls = await noCallsGateway({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'protocol.deposit', arguments: {} } })
+  assert.equal(noCalls.result.structuredContent.code, 'CALL_LIMIT_REACHED')
 })
 
 test('independent evaluator quorum rejects duplicate or unapproved signers', async () => {

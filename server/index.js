@@ -537,7 +537,7 @@ async function authorizeProtocolAction(action, credential) {
   const tool = toolDefinitions[action.tool]
   if (!tool) return { decision: 'DENY', reason: 'tool is not registered' }
   if (!(credential.allowedTools || []).includes(action.tool)) return { decision: 'DENY', reason: 'tool is outside the credential scope' }
-  const checked = validateArguments(action.tool, action.arguments || {}, current)
+  const checked = validateArguments(action.tool, action.arguments || {}, current, credential)
   if (!checked.ok) return { decision: 'DENY', reason: checked.reason }
   const amount = Number(action.arguments?.amount || 0)
   if (action.tool === 'vendor.pay' && amount > current.policy.maxPayment / 2 && Number(credential.riskLevel || 0) < 1) {

@@ -14,9 +14,6 @@ import {
     EvidenceRegistry,
     IBlockProver,
     IReceiptDecoder,
-    MockBlockProver,
-    MockReceiptDecoder,
-    MockStablecoin,
     NativePaymentValidator,
     OfficialReceiptDecoder,
     PolicyRegistry,
@@ -27,6 +24,89 @@ import {
     ToolRouter,
     AllowlistedStablecoinPaymentValidator
 } from "./Airlock.sol";
+
+contract MockStablecoin {
+    error InsufficientBalance();
+
+    mapping(address => uint256) public balanceOf;
+
+    event Transfer(address indexed from, address indexed to, uint256 amount);
+
+    function mint(address recipient, uint256 amount) external {
+        balanceOf[recipient] += amount;
+        emit Transfer(address(0), recipient, amount);
+    }
+
+    function transfer(address recipient, uint256 amount) external returns (bool) {
+        if (balanceOf[msg.sender] < amount) revert InsufficientBalance();
+        balanceOf[msg.sender] -= amount;
+        balanceOf[recipient] += amount;
+        emit Transfer(msg.sender, recipient, amount);
+        return true;
+    }
+}
+
+contract MockBlockProver is IBlockProver {
+    mapping(bytes32 => bool) public validProof;
+
+    function setProof(bytes calldata encodedTransaction, bool valid) external {
+        validProof[keccak256(encodedTransaction)] = valid;
+    }
+
+    function verify(
+        uint64,
+        uint64,
+        bytes calldata encodedTransaction,
+        MerkleProof calldata,
+        ContinuityProof calldata
+    ) external view returns (bool) {
+        return validProof[keccak256(encodedTransaction)];
+    }
+
+    function verify(
+        uint64,
+        uint64[] calldata,
+        bytes[] calldata encodedTransactions,
+        MerkleProof[] calldata,
+        ContinuityProof calldata
+    ) external view returns (bool) {
+        for (uint256 i; i < encodedTransactions.length; ++i) {
+            if (!validProof[keccak256(encodedTransactions[i])]) return false;
+        }
+        return true;
+    }
+
+    function calculateTxIndex(MerkleProof calldata proof) external pure returns (uint64 index) {
+        for (uint256 i; i < proof.siblings.length; ++i) {
+            if (proof.siblings[i].isLeft) index |= uint64(1) << uint64(i);
+        }
+    }
+}
+
+contract MockReceiptDecoder is IReceiptDecoder {
+    mapping(bytes32 => ReceiptFields) private receipts;
+
+    function setReceipt(
+        bytes calldata encodedTransaction,
+        uint8 status,
+        address emitter,
+        bytes32[] calldata topics,
+        bytes calldata data
+    ) external {
+        bytes32 key = keccak256(encodedTransaction);
+        delete receipts[key].logs;
+        receipts[key].status = status;
+        receipts[key].logs.push(LogEntry({emitter: emitter, topics: topics, data: data}));
+    }
+
+    function decodeReceiptFields(bytes calldata encodedTransaction)
+        external
+        view
+        returns (ReceiptFields memory)
+    {
+        return receipts[keccak256(encodedTransaction)];
+    }
+}
 
 contract OfficialReceiptDecoderTest is Test {
     struct TestLog {
