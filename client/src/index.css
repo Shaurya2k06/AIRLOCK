@@ -1,4 +1,4 @@
-:root { font-family: 'Manrope', ui-sans-serif, system-ui, sans-serif; color: #eef2e9; background: #091012; font-synthesis: none; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; }
-html { background: #091012; }
+:root { font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; color: #000; background: #f6f6f4; font-synthesis: none; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; }
+html { background: #f6f6f4; }
 body { margin: 0; min-width: 320px; min-height: 100vh; }
-button:focus-visible { outline: 2px solid #b8f4c4; outline-offset: 2px; }
+button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid #000; outline-offset: 3px; }
