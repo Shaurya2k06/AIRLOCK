@@ -13,6 +13,8 @@
     "live:check": "hardhat run scripts/live-check.ts",
     "deploy-live": "hardhat run scripts/deploy-live.ts",
     "import-proof": "hardhat run scripts/import-proof.ts",
+    "import-proof:batch": "hardhat run scripts/import-batch-proof.ts",
+    "register-tee-binding": "hardhat run scripts/register-tee-binding.ts",
     "worker": "hardhat run scripts/worker.ts",
     "live-step": "hardhat run scripts/live-step.ts",
     "ci": "npm run build && npm run typecheck && npm run manifest:test && npm run abi:check && npm run security:check && npm test"

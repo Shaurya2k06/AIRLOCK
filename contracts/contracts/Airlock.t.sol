@@ -20,6 +20,7 @@ import {
     OfficialReceiptDecoder,
     PolicyRegistry,
     ReleaseStatusRegistry,
+    RuntimeBindingRegistry,
     RoleAddress,
     ToolRouter,
     AllowlistedStablecoinPaymentValidator
@@ -63,6 +64,7 @@ contract AirlockTest is Test {
     address private statusAuthority = address(0x1004);
     address private admin = address(0x1005);
     address private guardian = address(0x1006);
+    address private teeVerifier = address(0x1007);
 
     bytes32 private orgId = keccak256("airlock-demo-org");
     bytes32 private releaseId = keccak256("airlock-demo-release");
@@ -83,6 +85,7 @@ contract AirlockTest is Test {
     EvidenceRegistry private evidence;
     AirlockAttestcoinAdapter private adapter;
     PolicyRegistry private policies;
+    RuntimeBindingRegistry private runtimeBindings;
     CapabilityIssuer private issuer;
     ToolRouter private router;
     AgentVault private vault;
@@ -126,7 +129,8 @@ contract AirlockTest is Test {
         evidence.setAdapter(address(adapter));
 
         policies = new PolicyRegistry(admin, guardian);
-        issuer = new CapabilityIssuer(admin, guardian, address(evidence), address(policies));
+        runtimeBindings = new RuntimeBindingRegistry(teeVerifier);
+        issuer = new CapabilityIssuer(admin, guardian, address(evidence), address(policies), address(runtimeBindings));
         vault = new AgentVault(admin);
         router = new ToolRouter(admin, address(issuer), address(vault));
         vm.prank(admin);
@@ -320,6 +324,93 @@ contract AirlockTest is Test {
         adapter.importArtifact(_request(txHash, 0));
         vm.expectRevert(AirlockAttestcoinAdapter.Replay.selector);
         adapter.importArtifact(_request(txHash, 0));
+    }
+
+    function test_AdapterBatchImportsMixedEvidenceWithOneContinuityProof() public {
+        bytes32 digest = keccak256("batch-digest");
+        bytes32 batchReleaseId = keccak256("batch-release");
+        bytes32 artifactTx = keccak256("batch-artifact-tx");
+        bytes32 evaluationTx = keccak256("batch-evaluation-tx");
+        _setReceipt(
+            artifactTx,
+            address(artifactRegistry),
+            _topics(adapter.ARTIFACT_TOPIC(), orgId, batchReleaseId, digest),
+            abi.encode(
+                keccak256("batch-manifest"),
+                keccak256("batch-artifact-root"),
+                keccak256("batch-weights"),
+                keccak256("batch-tokenizer"),
+                keccak256("batch-prompt"),
+                scopeRoot,
+                keccak256("batch-container"),
+                keccak256("batch-sbom"),
+                keccak256("batch-provenance"),
+                uint64(1),
+                uint64(1)
+            )
+        );
+        _setReceipt(
+            evaluationTx,
+            address(evaluationRegistry),
+            _topics(adapter.EVALUATION_TOPIC(), orgId, batchReleaseId, digest),
+            abi.encode(
+                suiteHash,
+                keccak256("batch-report"),
+                evaluatorSetHash,
+                uint32(9_000),
+                uint256(0),
+                uint64(block.timestamp),
+                uint64(block.timestamp + 1 days),
+                uint64(1)
+            )
+        );
+
+        bytes32[] memory txHashes = new bytes32[](2);
+        txHashes[0] = artifactTx;
+        txHashes[1] = evaluationTx;
+        uint8[] memory kinds = new uint8[](2);
+        kinds[0] = adapter.ARTIFACT();
+        kinds[1] = adapter.EVALUATION();
+        AirlockAttestcoinAdapter.BatchImportRequest memory request = _batchRequest(txHashes, kinds);
+
+        bytes32[] memory evidenceIds = adapter.importBatch(request);
+        assertEq(evidenceIds.length, 2);
+        assertTrue(evidence.getArtifact(evidence.releaseKey(orgId, digest)).exists);
+        assertTrue(evidence.getEvaluation(evidence.releaseKey(orgId, digest)).exists);
+    }
+
+    function test_AdapterBatchRejectsInvalidProofBeforeEvidenceMutation() public {
+        bytes32 firstDigest = keccak256("batch-invalid-first");
+        bytes32 secondDigest = keccak256("batch-invalid-second");
+        bytes32 firstTx = keccak256("batch-invalid-first-tx");
+        bytes32 secondTx = keccak256("batch-invalid-second-tx");
+        bytes memory artifactData = abi.encode(
+            keccak256("manifest"),
+            keccak256("root"),
+            keccak256("weights"),
+            keccak256("tokenizer"),
+            keccak256("prompt"),
+            scopeRoot,
+            keccak256("container"),
+            keccak256("sbom"),
+            keccak256("provenance"),
+            uint64(1),
+            uint64(1)
+        );
+        _setReceipt(firstTx, address(artifactRegistry), _topics(adapter.ARTIFACT_TOPIC(), orgId, releaseId, firstDigest), artifactData);
+        _setReceipt(secondTx, address(artifactRegistry), _topics(adapter.ARTIFACT_TOPIC(), orgId, releaseId, secondDigest), artifactData);
+        prover.setProof(abi.encode(secondTx), false);
+
+        bytes32[] memory txHashes = new bytes32[](2);
+        txHashes[0] = firstTx;
+        txHashes[1] = secondTx;
+        uint8[] memory kinds = new uint8[](2);
+        kinds[0] = adapter.ARTIFACT();
+        kinds[1] = adapter.ARTIFACT();
+        vm.expectRevert(AirlockAttestcoinAdapter.InvalidProof.selector);
+        adapter.importBatch(_batchRequest(txHashes, kinds));
+        assertFalse(evidence.getArtifact(evidence.releaseKey(orgId, firstDigest)).exists);
+        assertFalse(evidence.getArtifact(evidence.releaseKey(orgId, secondDigest)).exists);
     }
 
     function test_SourceRegistryRejectsWrongRolesAndScores() public {
@@ -663,6 +754,60 @@ contract AirlockTest is Test {
         assertEq(stablecoin.balanceOf(vendorRecipient), 0.1 ether);
     }
 
+    function test_TEERequiredBindsArtifactAndRuntimeUntilRevoked() public {
+        PolicyRegistry.PolicyInput memory teeInput = PolicyRegistry.PolicyInput({
+            approvedSuiteHash: suiteHash,
+            approvedEvaluatorSetHash: evaluatorSetHash,
+            allowedToolScopeRoot: scopeRoot,
+            minSafetyScoreBps: 8_000,
+            deniedCapabilityBitmap: 0,
+            spendCeiling: 0.35 ether,
+            perCallCeiling: 0.25 ether,
+            callCeiling: 2,
+            capabilityTtl: 600,
+            statusFreshness: 900,
+            teeRequired: true
+        });
+        vm.prank(admin);
+        bytes32 teePolicyHash = policies.register(teeInput);
+
+        bytes32 teeDigest = keccak256("tee-release-digest");
+        bytes32 teeReleaseId = keccak256("tee-release-id");
+        _importEvidenceWithPolicy(teeDigest, teeReleaseId, teeReleaseId, uint64(block.timestamp), teePolicyHash);
+        vm.expectRevert(CapabilityIssuer.TEERequired.selector);
+        issuer.issue(orgId, agentId, teeDigest, teePolicyHash);
+
+        uint64 bindingValidUntil = uint64(block.timestamp + 1 days);
+        vm.prank(teeVerifier);
+        bytes32 bindingId = runtimeBindings.register(
+            RuntimeBindingRegistry.BindingInput({
+                orgId: orgId,
+                agentId: agentId,
+                releaseDigest: teeDigest,
+                runtimeKey: runtimeKey,
+                teeMeasurement: keccak256("tee-measurement"),
+                quoteHash: keccak256("tee-quote"),
+                artifactRoot: keccak256("artifact-root"),
+                containerImageDigest: keccak256("container"),
+                validAfter: uint64(block.timestamp - 1),
+                validUntil: bindingValidUntil,
+                runtimeNonce: 1
+            })
+        );
+        assertEq(bindingId, runtimeBindings.bindingKey(orgId, agentId, teeDigest, runtimeKey));
+
+        bytes32 teeCapabilityId = issuer.issue(orgId, agentId, teeDigest, teePolicyHash);
+        CapabilityIssuer.Capability memory capability = issuer.get(teeCapabilityId);
+        assertGt(capability.expiresAt, uint64(block.timestamp));
+        assertLe(capability.expiresAt, bindingValidUntil);
+
+        vm.prank(teeVerifier);
+        runtimeBindings.revoke(orgId, agentId, teeDigest, runtimeKey, 2);
+        vm.prank(address(router));
+        vm.expectRevert(CapabilityIssuer.TEERequired.selector);
+        issuer.consume(teeCapabilityId, 0);
+    }
+
     function test_AdapterGuardianPauseRequiresAdminToUnpause() public {
         vm.prank(guardian);
         adapter.pause();
@@ -717,6 +862,16 @@ contract AirlockTest is Test {
         bytes32 evaluationReleaseId,
         uint64 evaluatedAt
     ) internal {
+        _importEvidenceWithPolicy(digest, artifactReleaseId, evaluationReleaseId, evaluatedAt, policyHash);
+    }
+
+    function _importEvidenceWithPolicy(
+        bytes32 digest,
+        bytes32 artifactReleaseId,
+        bytes32 evaluationReleaseId,
+        uint64 evaluatedAt,
+        bytes32 approvalPolicyHash
+    ) internal {
         bytes32 artifactTx = keccak256(abi.encode("artifact-tx", digest));
         bytes32 evaluationTx = keccak256(abi.encode("evaluation-tx", digest));
         bytes32 approvalTx = keccak256(abi.encode("approval-tx", digest));
@@ -764,7 +919,7 @@ contract AirlockTest is Test {
 
         bytes memory approvalData = abi.encode(
             runtimeKey,
-            policyHash,
+            approvalPolicyHash,
             scopeRoot,
             uint128(0.35 ether),
             uint128(0.25 ether),
@@ -845,6 +1000,30 @@ contract AirlockTest is Test {
             continuityProof: IBlockProver.ContinuityProof({lowerEndpointDigest: bytes32(0), roots: roots}),
             logIndex: logIndex
         });
+    }
+
+    function _batchRequest(bytes32[] memory txHashes, uint8[] memory kinds)
+        internal
+        pure
+        returns (AirlockAttestcoinAdapter.BatchImportRequest memory request)
+    {
+        uint256 length = txHashes.length;
+        request.chainKey = SOURCE_CHAIN_KEY;
+        request.blockHeights = new uint64[](length);
+        request.encodedTransactions = new bytes[](length);
+        request.merkleProofs = new IBlockProver.MerkleProof[](length);
+        request.logIndices = new uint32[](length);
+        request.kinds = kinds;
+        request.continuityProof = IBlockProver.ContinuityProof({
+            lowerEndpointDigest: bytes32(0),
+            roots: new bytes32[](0)
+        });
+        for (uint256 i; i < length; ++i) {
+            IBlockProver.MerkleProofEntry[] memory siblings = new IBlockProver.MerkleProofEntry[](0);
+            request.blockHeights[i] = uint64(uint256(txHashes[i]));
+            request.encodedTransactions[i] = abi.encode(txHashes[i]);
+            request.merkleProofs[i] = IBlockProver.MerkleProof({root: bytes32(0), siblings: siblings});
+        }
     }
 
     function _intent(

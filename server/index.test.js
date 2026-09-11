@@ -29,7 +29,7 @@ test('runbook exposes the complete terminal workflow without secrets', () => {
   const value = runbook({ proofs: { artifact: { creditcoinTxHash: '0xproof' } }, live: { allowedActionTx: '0xaction' } })
   assert.deepEqual(value.steps.map((step) => step.id), [
     'preflight', 'deploy', 'proof-artifact', 'proof-evaluation', 'proof-approval', 'proof-status',
-    'execute', 'deposit', 'revoke', 'proof-revocation', 'blocked',
+    'proof-batch', 'tee-binding', 'execute', 'deposit', 'revoke', 'proof-revocation', 'blocked',
   ])
   assert.equal(value.steps.find((step) => step.id === 'proof-artifact').status, 'COMPLETE')
   assert.equal(value.steps.find((step) => step.id === 'execute').status, 'COMPLETE')

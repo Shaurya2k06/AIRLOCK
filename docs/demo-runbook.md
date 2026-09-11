@@ -21,6 +21,9 @@ live Attestcoin gate.
 2. Run `npm run live:check`, then `npm run deploy-live` from `contracts`.
 3. Import the four publication/evaluation/approval/status proofs with
    `IMPORT_KIND=... npm run import-proof`.
+   For independent source transactions, `SOURCE_TX_HASHES=0x...,0x...`
+   and `IMPORT_KINDS=artifact,evaluation npm run import-proof:batch` submits
+   one atomic batch of up to 10 proofs.
 4. Run `LIVE_STEP=execute npm run live-step`; retain the capability and allowed
    payment transaction hashes.
 5. Run `LIVE_STEP=deposit npm run live-step`; retain the bounded deposit
@@ -29,6 +32,14 @@ live Attestcoin gate.
    intent before publishing the source revocation.
 7. Import the revocation proof.
 8. Run `LIVE_STEP=blocked npm run live-step`; the router simulation must revert.
+
+TEE extension rehearsal: set `TEE_REQUIRED=true`, `TEE_MEASUREMENT`, and
+`TEE_QUOTE_HASH` only after the verifier has independently validated the quote,
+deploy the current contracts, import the source proofs, then run
+`npm run register-tee-binding`. A `teeRequired=true` policy can issue only
+while that exact runtime/artifact/container binding is active; revoking the
+binding blocks later capability consumption.
+This flow is verifier-attested, not an on-chain hardware-quote proof.
 
 The same sequence can be driven by `WORKER_ONCE=true npm run worker` for a
 single source scan, or `npm run worker` for polling/retry behavior.

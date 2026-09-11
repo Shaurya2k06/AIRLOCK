@@ -9,8 +9,9 @@ a second full rehearsal from a clean clone of the submission commit. Local CI
 and the pushed GitHub CI run are green. The live server recheck confirms all
 four evidence classes and the post-revocation block on the current deployment.
 
-Batch imports and TEE binding remain post-MVP and intentionally have not
-started; the single-proof import and capability-containment gates are stable.
+Batch imports and verifier-attested TEE binding are now implemented and tested
+as post-MVP extensions. They are not retrofitted into the frozen live
+deployment until a fresh deployment and rehearsal are run.
 
 Still external to this workspace: publishing the repository publicly and
 uploading a public demo video. Do not claim either as complete until the final
@@ -56,7 +57,8 @@ Sepolia evidence
 | P1 | Security, judging, or demo reliability improvement |
 | P2 | Post-MVP/company roadmap |
 
-No visual polish should block the first real Attestcoin proof. No batch or TEE work should begin before single-proof import and capability containment are stable.
+No visual polish should block the first real Attestcoin proof. Batch and TEE
+work follows the stable single-proof and capability-containment gates.
 
 ## 4. Phase 0 — Attestcoin proof spike and kill gate
 
@@ -203,6 +205,7 @@ docs
    - importApprovalProof
    - importStatusProof
    - importRevocationProof
+   - importBatch (up to 10 proofs sharing one continuity proof)
 3. Decode the proven transaction and receipt.
 4. Require status 1, expected chain key, emitter, topic, topic count, data length, and log index.
 5. Decode fields from the receipt, never from caller payload.
@@ -230,6 +233,18 @@ docs
 - Every evidence class imports from a real proof.
 - Every negative case fails before evidence changes.
 - No owner function can manually write evidence.
+
+### Extension status — batch and TEE
+
+- `importBatch` calls the official batch verifier once, validates every receipt
+  and event class, and reverts atomically if any item fails.
+- `npm run import-proof:batch` submits up to 10 source transactions using the
+  SDK batch proof builder.
+- `RuntimeBindingRegistry` accepts monotonic verifier-attested bindings and
+  `CapabilityIssuer` requires a matching, unexpired artifact/container binding
+  whenever `teeRequired` is true.
+- This is not a hardware or quote-verification proof: the configured verifier
+  role must independently validate the TEE quote before registering its hash.
 
 ## 9. Phase 5 — Policy registry and deterministic conjunction
 

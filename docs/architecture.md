@@ -19,6 +19,9 @@ EvidenceRegistry + PolicyRegistry
           │
           ▼ deterministic conjunction
 CapabilityIssuer → ToolRouter → AgentVault → allowlisted destination
+        ▲
+        │ optional verifier-attested runtime binding
+RuntimeBindingRegistry
 ```
 
 ## Trust boundaries
@@ -43,14 +46,18 @@ CapabilityIssuer → ToolRouter → AgentVault → allowlisted destination
 | `EvaluationRegistry` | Sepolia | evaluator result and evaluation window |
 | `DeploymentApprovalRegistry` | Sepolia | runtime key, scope, policy, budgets |
 | `ReleaseStatusRegistry` | Sepolia | active checkpoints and monotonic revocation |
-| `AirlockAttestcoinAdapter` | Creditcoin | proof verification, receipt decoding, semantic import, replay |
+| `AirlockAttestcoinAdapter` | Creditcoin | proof verification, receipt decoding, semantic import, replay; atomic batches up to 10 |
 | `EvidenceRegistry` | Creditcoin | adapter-only normalized evidence |
 | `PolicyRegistry` | Creditcoin | immutable-by-hash policy records and pauses |
 | `CapabilityIssuer` | Creditcoin | deterministic issuance, accounting, current-status checks |
+| `RuntimeBindingRegistry` | Creditcoin | verifier-attested measurement/key/artifact binding for TEE-required policies |
 | `ToolRouter` | Creditcoin | EIP-712, scope proof, validator, nonce, idempotency, execution |
 | `AgentVault` | Creditcoin | custody and router-only execution with timelocked recovery |
 | `MockStablecoin` | Creditcoin demo | bounded token balance held by the vault for vendor payments |
 
 Base mode binds a release digest to a runtime signing key. It does not prove
-that a running process loaded those weights; that requires an additional TEE
-binding.
+that a running process loaded those weights. TEE-required mode adds a
+verifier-attested measurement/quote hash, matches it to the artifact and
+container digests, intersects capability expiry with the binding window, and
+rechecks the binding on consume. The verifier must validate the underlying
+quote; the registry does not claim to verify hardware quotes on-chain.

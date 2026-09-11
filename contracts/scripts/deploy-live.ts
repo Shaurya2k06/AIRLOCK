@@ -98,6 +98,9 @@ async function main() {
     const policyAdmin = new Wallet(required("CREDITCOIN_POLICY_ADMIN_PRIVATE_KEY"), creditcoinRpc);
     const guardian = new Wallet(required("CREDITCOIN_GUARDIAN_PRIVATE_KEY"), creditcoinRpc);
     const runtime = new Wallet(required("RUNTIME_PRIVATE_KEY"), creditcoinRpc);
+    const teeVerifier = getAddress(
+        process.env.CREDITCOIN_TEE_VERIFIER_ADDRESS?.trim() || await policyAdmin.getAddress(),
+    );
 
     const sourceChainId = Number(required("SOURCE_CHAIN_ID"));
     const sourceNetwork = await sourceRpc.getNetwork();
@@ -123,6 +126,10 @@ async function main() {
     const depositSelector = selector("deposit(bytes32)");
     const paymentConstraints = id("AIRLOCK_PAYMENT_V1");
     const depositConstraints = id("AIRLOCK_DEPOSIT_V1");
+    const teeRequired = ["1", "true", "yes"].includes((process.env.TEE_REQUIRED || "").toLowerCase());
+    if (teeRequired && (!process.env.TEE_MEASUREMENT?.trim() || !process.env.TEE_QUOTE_HASH?.trim())) {
+        throw new Error("TEE_REQUIRED=true needs TEE_MEASUREMENT and TEE_QUOTE_HASH");
+    }
 
     const artifactRegistry = await deploy("ArtifactRegistry", sourceDeployer, await publisher.getAddress());
     const evaluationRegistry = await deploy("EvaluationRegistry", sourceDeployer, await evaluator.getAddress());
@@ -188,11 +195,12 @@ async function main() {
         callCeiling: 2,
         capabilityTtl: 3_600,
         statusFreshness: 3_600,
-        teeRequired: false,
+        teeRequired,
     };
     const evidence = await deploy("EvidenceRegistry", creditcoinDeployer, await policyAdmin.getAddress());
     const decoder = await deploy("OfficialReceiptDecoder", creditcoinDeployer);
     const policies = await deploy("PolicyRegistry", creditcoinDeployer, await policyAdmin.getAddress(), await guardian.getAddress());
+    const runtimeBindings = await deploy("RuntimeBindingRegistry", creditcoinDeployer, teeVerifier);
     const policyHash = await (policies as any).hashPolicy(policyInput);
     const issuer = await deploy(
         "CapabilityIssuer",
@@ -201,6 +209,7 @@ async function main() {
         await guardian.getAddress(),
         await evidence.getAddress(),
         await policies.getAddress(),
+        await runtimeBindings.getAddress(),
     );
     const vault = await deploy("AgentVault", creditcoinDeployer, await policyAdmin.getAddress());
     const router = await deploy("ToolRouter", creditcoinDeployer, await policyAdmin.getAddress(), await issuer.getAddress(), await vault.getAddress());
@@ -311,12 +320,14 @@ async function main() {
                 worker: await worker.getAddress(),
                 policyAdmin: await policyAdmin.getAddress(),
                 guardian: await guardian.getAddress(),
+                teeVerifier,
                 runtime: await runtime.getAddress(),
             },
             decoder: await decoder.getAddress(),
             evidence: await evidence.getAddress(),
             adapter: await adapter.getAddress(),
             policies: await policies.getAddress(),
+            runtimeBindings: await runtimeBindings.getAddress(),
             issuer: await issuer.getAddress(),
             vault: await vault.getAddress(),
             router: await router.getAddress(),
@@ -334,6 +345,7 @@ async function main() {
             releaseVersion: manifest.payload.releaseVersion,
             manifestHash,
             artifactRoot,
+            containerImageDigest,
             policyHash,
             scopeRoot,
             paymentLeaf,

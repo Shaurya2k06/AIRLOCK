@@ -33,8 +33,11 @@ turn that ability into arbitrary or unbounded authority.
 | Validator bypass or target substitution | Scope leaf commits target, selector, validator, constraints |
 | Reentrancy | Router lock plus consume/accounting before vault call |
 | Revocation race | Current status is checked on every consume; TTL and freshness bound the gap |
+| Runtime loads an unapproved artifact in TEE mode | Verifier-attested binding matches runtime key, artifact root, container digest, and expiry; the verifier must validate the quote |
 | Emergency misuse | Guardian functions only pause or revoke; unpause is admin-only |
 | Artifact substitution | Canonical CBOR manifest, sorted leaves, and release digest |
 
 Base mode intentionally does not claim that the runtime loaded the approved
-weights. A TEE/runtime-binding extension is required for that stronger claim.
+weights. TEE-required mode adds a verifier-attested binding, but AIRLOCK does
+not verify hardware quotes on-chain or make that verifier's off-chain work
+disappear.

@@ -105,7 +105,8 @@ Production deployments separate publisher, evaluator, approver, and status keys.
 4. Governance emits DeploymentApproved, binding agent, runtime key, policy, scope, budgets, and time window.
 5. The status authority emits a short-lived ACTIVE checkpoint.
 6. A worker waits for Attestcoin attestation, generates proofs, and submits them to Creditcoin.
-7. AirlockAttestcoinAdapter verifies and decodes each receipt.
+7. AirlockAttestcoinAdapter verifies and decodes each receipt, or verifies a
+   bounded batch with one shared continuity proof.
 8. ReleaseEvidenceRegistry stores normalized evidence and replay identifiers.
 9. CapabilityIssuer evaluates the deterministic conjunction.
 10. A short-lived capability is issued to the runtime key.
@@ -280,6 +281,11 @@ evidenceId = keccak256(
 
 SDK query replay protection is not enough. AIRLOCK also enforces publisher, evaluator, approval, status, capability, and action nonces.
 
+`AirlockAttestcoinAdapter.importBatch` accepts at most 10 items, calls the
+official batch verifier once with a shared continuity proof, and applies all
+receipt and event checks atomically. The batch path reduces verifier overhead
+but does not change evidence semantics or replay protection.
+
 ## 11. Creditcoin contracts
 
 | Contract | Responsibility |
@@ -292,7 +298,7 @@ SDK query replay protection is not enough. AIRLOCK also enforces publisher, eval
 | ToolRouter | Typed intent, scope proof, validator, accounting, execution |
 | AgentVault | Protected funds callable only through ToolRouter |
 | EmergencyBrake | Organization/release/agent/runtime/target/capability pauses |
-| RuntimeBindingRegistry | Optional TEE evidence |
+| RuntimeBindingRegistry | Verifier-attested runtime measurement/key/artifact bindings |
 | AuditTrail | Normalized evidence, denial, issuance, action, and revocation events |
 
 Keep the Attestcoin adapter isolated and immutable.
@@ -324,6 +330,13 @@ AND TEE evidence is valid when TEE_REQUIRED is enabled
 ~~~
 
 Effective scope is always an intersection:
+
+When `TEE_REQUIRED` is enabled, `RuntimeBindingRegistry` must contain a
+non-revoked verifier-attested binding for the exact org, agent, release,
+runtime key, artifact root, and container image digest. The capability expiry
+is intersected with the binding window and the binding is rechecked on every
+consume. The registry stores a measurement and quote hash; it does not verify
+hardware quotes on-chain, so this is not a standalone hardware proof.
 
 ~~~text
 artifactToolScope
@@ -440,10 +453,8 @@ Suggested demo values: 30-minute active checkpoint, 10-minute capability, 60-sec
 - React evidence/capability/action dashboard.
 - Adversarial Foundry tests and public deployment evidence.
 
-### Post-MVP
+### Remaining Post-MVP
 
-- Batch imports.
-- TEE runtime binding.
 - Safe/account-abstraction integration.
 - Multiple organizations.
 - Redundant proof workers.

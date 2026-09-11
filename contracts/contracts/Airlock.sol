@@ -28,6 +28,14 @@ interface IBlockProver {
         ContinuityProof calldata continuityProof
     ) external view returns (bool);
 
+    function verify(
+        uint64 chainKey,
+        uint64[] calldata heights,
+        bytes[] calldata encodedTransactions,
+        MerkleProof[] calldata merkleProofs,
+        ContinuityProof calldata sharedContinuityProof
+    ) external view returns (bool);
+
     function calculateTxIndex(MerkleProof calldata merkleProof) external view returns (uint64);
 }
 
@@ -542,12 +550,15 @@ contract AirlockAttestcoinAdapter is RoleAddress {
     error InvalidStatus();
     error Replay();
     error MalformedLog();
+    error InvalidBatch();
+    error InvalidKind();
 
     uint8 public constant ARTIFACT = 1;
     uint8 public constant EVALUATION = 2;
     uint8 public constant APPROVAL = 3;
     uint8 public constant STATUS = 4;
     uint8 public constant REVOCATION = 5;
+    uint256 public constant MAX_BATCH_SIZE = 10;
 
     bytes32 public constant ARTIFACT_TOPIC = keccak256(
         "ArtifactPublished(bytes32,bytes32,bytes32,bytes32,bytes32,bytes32,bytes32,bytes32,bytes32,bytes32,bytes32,bytes32,uint64,uint64)"
@@ -572,6 +583,53 @@ contract AirlockAttestcoinAdapter is RoleAddress {
         IBlockProver.MerkleProof merkleProof;
         IBlockProver.ContinuityProof continuityProof;
         uint32 logIndex;
+    }
+
+    struct BatchImportRequest {
+        uint64 chainKey;
+        uint64[] blockHeights;
+        bytes[] encodedTransactions;
+        IBlockProver.MerkleProof[] merkleProofs;
+        IBlockProver.ContinuityProof continuityProof;
+        uint32[] logIndices;
+        uint8[] kinds;
+    }
+
+    struct ArtifactData {
+        bytes32 manifestHash;
+        bytes32 artifactRoot;
+        bytes32 weightsHash;
+        bytes32 tokenizerHash;
+        bytes32 systemPromptHash;
+        bytes32 toolManifestRoot;
+        bytes32 containerImageDigest;
+        bytes32 sbomHash;
+        bytes32 provenanceHash;
+        uint64 releaseVersion;
+        uint64 publisherNonce;
+    }
+
+    struct EvaluationData {
+        bytes32 suiteHash;
+        bytes32 reportHash;
+        bytes32 evaluatorSetHash;
+        uint32 safetyScoreBps;
+        uint256 deniedCapabilityBitmap;
+        uint64 evaluatedAt;
+        uint64 validUntil;
+        uint64 evaluationNonce;
+    }
+
+    struct ApprovalData {
+        address runtimeKey;
+        bytes32 policyHash;
+        bytes32 requestedScopeRoot;
+        uint128 totalSpendCap;
+        uint128 perCallValueCap;
+        uint32 callCap;
+        uint64 validAfter;
+        uint64 validUntil;
+        uint64 approvalNonce;
     }
 
     uint64 public immutable sourceChainKey;
@@ -642,46 +700,7 @@ contract AirlockAttestcoinAdapter is RoleAddress {
             4,
             352
         );
-        if (data.length == 0 || topics.length != 4) revert MalformedLog();
-        (
-            bytes32 manifestHash,
-            bytes32 artifactRoot,
-            bytes32 weightsHash,
-            bytes32 tokenizerHash,
-            bytes32 systemPromptHash,
-            bytes32 toolManifestRoot,
-            bytes32 containerImageDigest,
-            bytes32 sbomHash,
-            bytes32 provenanceHash,
-            uint64 releaseVersion,
-            uint64 publisherNonce
-        ) = abi.decode(data, (bytes32, bytes32, bytes32, bytes32, bytes32, bytes32, bytes32, bytes32, bytes32, uint64, uint64));
-        if (releaseVersion == 0 || publisherNonce == 0) revert MalformedLog();
-        bytes32 orgId = topics[1];
-        bytes32 releaseId = topics[2];
-        bytes32 releaseDigest = topics[3];
-        evidenceId = _mark(ARTIFACT, queryKey, releaseDigest);
-        evidence.recordArtifact(
-            EvidenceRegistry.ArtifactEvidence({
-                exists: true,
-                orgId: orgId,
-                releaseId: releaseId,
-                releaseDigest: releaseDigest,
-                manifestHash: manifestHash,
-                artifactRoot: artifactRoot,
-                weightsHash: weightsHash,
-                tokenizerHash: tokenizerHash,
-                systemPromptHash: systemPromptHash,
-                toolManifestRoot: toolManifestRoot,
-                containerImageDigest: containerImageDigest,
-                sbomHash: sbomHash,
-                provenanceHash: provenanceHash,
-                releaseVersion: releaseVersion,
-                publisherNonce: publisherNonce,
-                evidenceId: evidenceId
-            })
-        );
-        emit ProofImported(ARTIFACT, queryKey, evidenceId);
+        evidenceId = _recordArtifact(queryKey, topics, data);
     }
 
     function importEvaluation(ImportRequest calldata request) external returns (bytes32 evidenceId) {
@@ -693,39 +712,7 @@ contract AirlockAttestcoinAdapter is RoleAddress {
             4,
             256
         );
-        (
-            bytes32 suiteHash,
-            bytes32 reportHash,
-            bytes32 evaluatorSetHash,
-            uint32 safetyScoreBps,
-            uint256 deniedCapabilityBitmap,
-            uint64 evaluatedAt,
-            uint64 validUntil,
-            uint64 evaluationNonce
-        ) = abi.decode(data, (bytes32, bytes32, bytes32, uint32, uint256, uint64, uint64, uint64));
-        if (safetyScoreBps > 10_000 || validUntil <= evaluatedAt || evaluationNonce == 0) revert MalformedLog();
-        bytes32 orgId = topics[1];
-        bytes32 releaseId = topics[2];
-        bytes32 releaseDigest = topics[3];
-        evidenceId = _mark(EVALUATION, queryKey, releaseDigest);
-        evidence.recordEvaluation(
-            EvidenceRegistry.EvaluationEvidence({
-                exists: true,
-                orgId: orgId,
-                releaseId: releaseId,
-                releaseDigest: releaseDigest,
-                suiteHash: suiteHash,
-                reportHash: reportHash,
-                evaluatorSetHash: evaluatorSetHash,
-                safetyScoreBps: safetyScoreBps,
-                deniedCapabilityBitmap: deniedCapabilityBitmap,
-                evaluatedAt: evaluatedAt,
-                validUntil: validUntil,
-                evaluationNonce: evaluationNonce,
-                evidenceId: evidenceId
-            })
-        );
-        emit ProofImported(EVALUATION, queryKey, evidenceId);
+        evidenceId = _recordEvaluation(queryKey, topics, data);
     }
 
     function importApproval(ImportRequest calldata request) external returns (bytes32 evidenceId) {
@@ -737,18 +724,153 @@ contract AirlockAttestcoinAdapter is RoleAddress {
             4,
             288
         );
-        (
-            address runtimeKey,
-            bytes32 policyHash,
-            bytes32 requestedScopeRoot,
-            uint128 totalSpendCap,
-            uint128 perCallValueCap,
-            uint32 callCap,
-            uint64 validAfter,
-            uint64 validUntil,
-            uint64 approvalNonce
-        ) = abi.decode(data, (address, bytes32, bytes32, uint128, uint128, uint32, uint64, uint64, uint64));
-        if (runtimeKey == address(0) || callCap == 0 || validUntil <= validAfter || approvalNonce == 0) {
+        evidenceId = _recordApproval(queryKey, topics, data);
+    }
+
+    function importStatus(ImportRequest calldata request) external returns (bytes32 evidenceId) {
+        (bytes32 queryKey, bytes32[] memory topics, bytes memory data) = _prepare(
+            STATUS,
+            request,
+            statusEmitter,
+            STATUS_TOPIC,
+            4,
+            96
+        );
+        evidenceId = _recordStatus(queryKey, topics, data);
+    }
+
+    function importRevocation(ImportRequest calldata request) external returns (bytes32 evidenceId) {
+        (bytes32 queryKey, bytes32[] memory topics, bytes memory data) = _prepare(
+            REVOCATION,
+            request,
+            statusEmitter,
+            REVOCATION_TOPIC,
+            4,
+            64
+        );
+        evidenceId = _recordRevocation(queryKey, topics, data);
+    }
+
+    function importBatch(BatchImportRequest calldata request)
+        external
+        returns (bytes32[] memory evidenceIds)
+    {
+        uint256 length = request.kinds.length;
+        if (
+            length == 0
+                || length > MAX_BATCH_SIZE
+                || request.blockHeights.length != length
+                || request.encodedTransactions.length != length
+                || request.merkleProofs.length != length
+                || request.logIndices.length != length
+        ) revert InvalidBatch();
+        if (paused) revert Paused();
+        if (request.chainKey != sourceChainKey) revert UnsupportedChain();
+        if (!verifier.verify(
+            request.chainKey,
+            request.blockHeights,
+            request.encodedTransactions,
+            request.merkleProofs,
+            request.continuityProof
+        )) revert InvalidProof();
+
+        evidenceIds = new bytes32[](length);
+        for (uint256 i; i < length; ++i) {
+            (address expectedEmitter, bytes32 expectedTopic, uint256 expectedTopicCount, uint256 expectedDataLength) =
+                _expected(request.kinds[i]);
+            (bytes32 queryKey, bytes32[] memory topics, bytes memory data) = _prepareBatchItem(
+                request,
+                i,
+                expectedEmitter,
+                expectedTopic,
+                expectedTopicCount,
+                expectedDataLength
+            );
+            evidenceIds[i] = _record(request.kinds[i], queryKey, topics, data);
+        }
+    }
+
+    function _recordArtifact(bytes32 queryKey, bytes32[] memory topics, bytes memory data)
+        internal
+        returns (bytes32 evidenceId)
+    {
+        if (data.length == 0 || topics.length != 4) revert MalformedLog();
+        ArtifactData memory decoded = abi.decode(data, (ArtifactData));
+        if (decoded.releaseVersion == 0 || decoded.publisherNonce == 0) revert MalformedLog();
+        bytes32 orgId = topics[1];
+        bytes32 releaseId = topics[2];
+        bytes32 releaseDigest = topics[3];
+        evidenceId = _mark(ARTIFACT, queryKey, releaseDigest);
+        evidence.recordArtifact(
+            EvidenceRegistry.ArtifactEvidence({
+                exists: true,
+                orgId: orgId,
+                releaseId: releaseId,
+                releaseDigest: releaseDigest,
+                manifestHash: decoded.manifestHash,
+                artifactRoot: decoded.artifactRoot,
+                weightsHash: decoded.weightsHash,
+                tokenizerHash: decoded.tokenizerHash,
+                systemPromptHash: decoded.systemPromptHash,
+                toolManifestRoot: decoded.toolManifestRoot,
+                containerImageDigest: decoded.containerImageDigest,
+                sbomHash: decoded.sbomHash,
+                provenanceHash: decoded.provenanceHash,
+                releaseVersion: decoded.releaseVersion,
+                publisherNonce: decoded.publisherNonce,
+                evidenceId: evidenceId
+            })
+        );
+        emit ProofImported(ARTIFACT, queryKey, evidenceId);
+    }
+
+    function _recordEvaluation(bytes32 queryKey, bytes32[] memory topics, bytes memory data)
+        internal
+        returns (bytes32 evidenceId)
+    {
+        if (data.length == 0 || topics.length != 4) revert MalformedLog();
+        EvaluationData memory decoded = abi.decode(data, (EvaluationData));
+        if (
+            decoded.safetyScoreBps > 10_000
+                || decoded.validUntil <= decoded.evaluatedAt
+                || decoded.evaluationNonce == 0
+        ) revert MalformedLog();
+        bytes32 orgId = topics[1];
+        bytes32 releaseId = topics[2];
+        bytes32 releaseDigest = topics[3];
+        evidenceId = _mark(EVALUATION, queryKey, releaseDigest);
+        evidence.recordEvaluation(
+            EvidenceRegistry.EvaluationEvidence({
+                exists: true,
+                orgId: orgId,
+                releaseId: releaseId,
+                releaseDigest: releaseDigest,
+                suiteHash: decoded.suiteHash,
+                reportHash: decoded.reportHash,
+                evaluatorSetHash: decoded.evaluatorSetHash,
+                safetyScoreBps: decoded.safetyScoreBps,
+                deniedCapabilityBitmap: decoded.deniedCapabilityBitmap,
+                evaluatedAt: decoded.evaluatedAt,
+                validUntil: decoded.validUntil,
+                evaluationNonce: decoded.evaluationNonce,
+                evidenceId: evidenceId
+            })
+        );
+        emit ProofImported(EVALUATION, queryKey, evidenceId);
+    }
+
+    function _recordApproval(bytes32 queryKey, bytes32[] memory topics, bytes memory data)
+        internal
+        returns (bytes32 evidenceId)
+    {
+        if (data.length == 0 || topics.length != 4) revert MalformedLog();
+        ApprovalData memory decoded = abi.decode(data, (ApprovalData));
+        if (
+            decoded.runtimeKey == address(0)
+                || decoded.callCap == 0
+                || decoded.validUntil <= decoded.validAfter
+                || decoded.approvalNonce == 0
+        ) {
             revert MalformedLog();
         }
         bytes32 orgId = topics[1];
@@ -761,30 +883,26 @@ contract AirlockAttestcoinAdapter is RoleAddress {
                 orgId: orgId,
                 agentId: agentId,
                 releaseDigest: releaseDigest,
-                runtimeKey: runtimeKey,
-                policyHash: policyHash,
-                requestedScopeRoot: requestedScopeRoot,
-                totalSpendCap: totalSpendCap,
-                perCallValueCap: perCallValueCap,
-                callCap: callCap,
-                validAfter: validAfter,
-                validUntil: validUntil,
-                approvalNonce: approvalNonce,
+                runtimeKey: decoded.runtimeKey,
+                policyHash: decoded.policyHash,
+                requestedScopeRoot: decoded.requestedScopeRoot,
+                totalSpendCap: decoded.totalSpendCap,
+                perCallValueCap: decoded.perCallValueCap,
+                callCap: decoded.callCap,
+                validAfter: decoded.validAfter,
+                validUntil: decoded.validUntil,
+                approvalNonce: decoded.approvalNonce,
                 evidenceId: evidenceId
             })
         );
         emit ProofImported(APPROVAL, queryKey, evidenceId);
     }
 
-    function importStatus(ImportRequest calldata request) external returns (bytes32 evidenceId) {
-        (bytes32 queryKey, bytes32[] memory topics, bytes memory data) = _prepare(
-            STATUS,
-            request,
-            statusEmitter,
-            STATUS_TOPIC,
-            4,
-            96
-        );
+    function _recordStatus(bytes32 queryKey, bytes32[] memory topics, bytes memory data)
+        internal
+        returns (bytes32 evidenceId)
+    {
+        if (data.length == 0 || topics.length != 4) revert MalformedLog();
         (uint64 statusNonce, uint64 issuedAt, uint64 validUntil) = abi.decode(data, (uint64, uint64, uint64));
         bytes32 orgId = topics[1];
         bytes32 releaseDigest = topics[2];
@@ -810,15 +928,11 @@ contract AirlockAttestcoinAdapter is RoleAddress {
         emit ProofImported(STATUS, queryKey, evidenceId);
     }
 
-    function importRevocation(ImportRequest calldata request) external returns (bytes32 evidenceId) {
-        (bytes32 queryKey, bytes32[] memory topics, bytes memory data) = _prepare(
-            REVOCATION,
-            request,
-            statusEmitter,
-            REVOCATION_TOPIC,
-            4,
-            64
-        );
+    function _recordRevocation(bytes32 queryKey, bytes32[] memory topics, bytes memory data)
+        internal
+        returns (bytes32 evidenceId)
+    {
+        if (data.length == 0 || topics.length != 4) revert MalformedLog();
         (uint64 statusNonce, uint64 revokedAt) = abi.decode(data, (uint64, uint64));
         bytes32 orgId = topics[1];
         bytes32 releaseDigest = topics[2];
@@ -827,6 +941,18 @@ contract AirlockAttestcoinAdapter is RoleAddress {
         evidenceId = _mark(REVOCATION, queryKey, releaseDigest);
         evidence.recordRevocation(orgId, releaseDigest, reasonHash, statusNonce, revokedAt, evidenceId);
         emit ProofImported(REVOCATION, queryKey, evidenceId);
+    }
+
+    function _record(uint8 kind, bytes32 queryKey, bytes32[] memory topics, bytes memory data)
+        internal
+        returns (bytes32 evidenceId)
+    {
+        if (kind == ARTIFACT) return _recordArtifact(queryKey, topics, data);
+        if (kind == EVALUATION) return _recordEvaluation(queryKey, topics, data);
+        if (kind == APPROVAL) return _recordApproval(queryKey, topics, data);
+        if (kind == STATUS) return _recordStatus(queryKey, topics, data);
+        if (kind == REVOCATION) return _recordRevocation(queryKey, topics, data);
+        revert InvalidKind();
     }
 
     function queryKeyFor(
@@ -845,6 +971,50 @@ contract AirlockAttestcoinAdapter is RoleAddress {
         returns (bytes32)
     {
         return keccak256(abi.encode(kind, queryKey, releaseDigest));
+    }
+
+    function _expected(uint8 kind)
+        internal
+        view
+        returns (address emitter, bytes32 topic, uint256 topicCount, uint256 dataLength)
+    {
+        if (kind == ARTIFACT) return (artifactEmitter, ARTIFACT_TOPIC, 4, 352);
+        if (kind == EVALUATION) return (evaluationEmitter, EVALUATION_TOPIC, 4, 256);
+        if (kind == APPROVAL) return (approvalEmitter, APPROVAL_TOPIC, 4, 288);
+        if (kind == STATUS) return (statusEmitter, STATUS_TOPIC, 4, 96);
+        if (kind == REVOCATION) return (statusEmitter, REVOCATION_TOPIC, 4, 64);
+        revert InvalidKind();
+    }
+
+    function _prepareBatchItem(
+        BatchImportRequest calldata request,
+        uint256 index,
+        address expectedEmitter,
+        bytes32 expectedTopic,
+        uint256 expectedTopicCount,
+        uint256 expectedDataLength
+    ) internal view returns (bytes32 queryKey, bytes32[] memory topics, bytes memory data) {
+        IReceiptDecoder.ReceiptFields memory receipt = decoder.decodeReceiptFields(request.encodedTransactions[index]);
+        if (receipt.status != 1) revert FailedReceipt();
+        uint32 logIndex = request.logIndices[index];
+        if (logIndex >= receipt.logs.length) revert MalformedLog();
+        IReceiptDecoder.LogEntry memory log = receipt.logs[logIndex];
+        if (log.emitter != expectedEmitter) revert WrongEmitter();
+        if (log.topics.length != expectedTopicCount) revert WrongTopicCount();
+        if (log.topics[0] != expectedTopic) revert WrongTopic();
+        if (log.data.length != expectedDataLength) revert WrongDataLength();
+
+        uint64 transactionIndex = verifier.calculateTxIndex(request.merkleProofs[index]);
+        queryKey = queryKeyFor(
+            request.chainKey,
+            request.blockHeights[index],
+            transactionIndex,
+            logIndex,
+            log.emitter
+        );
+        if (usedQuery[queryKey]) revert Replay();
+        topics = log.topics;
+        data = log.data;
     }
 
     function _prepare(
@@ -999,6 +1169,138 @@ contract PolicyRegistry is RoleAddress {
     }
 }
 
+/// @notice Verifier-attested binding between a runtime key and one release artifact.
+/// @dev The verifier role is trusted to validate the underlying TEE quote off-chain.
+contract RuntimeBindingRegistry is RoleAddress {
+    error InvalidBinding();
+    error StaleNonce();
+    error UnknownBinding();
+    error AlreadyRevoked();
+
+    struct BindingInput {
+        bytes32 orgId;
+        bytes32 agentId;
+        bytes32 releaseDigest;
+        address runtimeKey;
+        bytes32 teeMeasurement;
+        bytes32 quoteHash;
+        bytes32 artifactRoot;
+        bytes32 containerImageDigest;
+        uint64 validAfter;
+        uint64 validUntil;
+        uint64 runtimeNonce;
+    }
+
+    struct Binding {
+        bool exists;
+        bool revoked;
+        bytes32 orgId;
+        bytes32 agentId;
+        bytes32 releaseDigest;
+        address runtimeKey;
+        bytes32 teeMeasurement;
+        bytes32 quoteHash;
+        bytes32 artifactRoot;
+        bytes32 containerImageDigest;
+        uint64 validAfter;
+        uint64 validUntil;
+        uint64 runtimeNonce;
+    }
+
+    mapping(bytes32 => Binding) private _bindings;
+
+    event RuntimeBound(
+        bytes32 indexed bindingId,
+        bytes32 indexed orgId,
+        bytes32 indexed releaseDigest,
+        bytes32 agentId,
+        address runtimeKey,
+        bytes32 teeMeasurement,
+        bytes32 quoteHash,
+        bytes32 artifactRoot,
+        bytes32 containerImageDigest,
+        uint64 validAfter,
+        uint64 validUntil,
+        uint64 runtimeNonce
+    );
+    event RuntimeBindingRevoked(bytes32 indexed bindingId, uint64 runtimeNonce);
+
+    constructor(address verifier) RoleAddress(verifier) {}
+
+    function bindingKey(bytes32 orgId, bytes32 agentId, bytes32 releaseDigest, address runtimeKey)
+        public
+        pure
+        returns (bytes32)
+    {
+        return keccak256(abi.encode("AIRLOCK_TEE_BINDING_V1", orgId, agentId, releaseDigest, runtimeKey));
+    }
+
+    function register(BindingInput calldata value) external onlyRole returns (bytes32 bindingId) {
+        if (
+            value.runtimeKey == address(0)
+                || value.teeMeasurement == bytes32(0)
+                || value.quoteHash == bytes32(0)
+                || value.artifactRoot == bytes32(0)
+                || value.containerImageDigest == bytes32(0)
+                || value.validUntil <= value.validAfter
+                || value.runtimeNonce == 0
+        ) revert InvalidBinding();
+        bindingId = bindingKey(value.orgId, value.agentId, value.releaseDigest, value.runtimeKey);
+        Binding storage current = _bindings[bindingId];
+        if (current.exists) {
+            if (current.revoked) revert AlreadyRevoked();
+            if (value.runtimeNonce <= current.runtimeNonce) revert StaleNonce();
+        }
+        _bindings[bindingId] = Binding({
+            exists: true,
+            revoked: false,
+            orgId: value.orgId,
+            agentId: value.agentId,
+            releaseDigest: value.releaseDigest,
+            runtimeKey: value.runtimeKey,
+            teeMeasurement: value.teeMeasurement,
+            quoteHash: value.quoteHash,
+            artifactRoot: value.artifactRoot,
+            containerImageDigest: value.containerImageDigest,
+            validAfter: value.validAfter,
+            validUntil: value.validUntil,
+            runtimeNonce: value.runtimeNonce
+        });
+        emit RuntimeBound(
+            bindingId,
+            value.orgId,
+            value.releaseDigest,
+            value.agentId,
+            value.runtimeKey,
+            value.teeMeasurement,
+            value.quoteHash,
+            value.artifactRoot,
+            value.containerImageDigest,
+            value.validAfter,
+            value.validUntil,
+            value.runtimeNonce
+        );
+    }
+
+    function revoke(bytes32 orgId, bytes32 agentId, bytes32 releaseDigest, address runtimeKey, uint64 runtimeNonce)
+        external
+        onlyRole
+    {
+        bytes32 bindingId = bindingKey(orgId, agentId, releaseDigest, runtimeKey);
+        Binding storage current = _bindings[bindingId];
+        if (!current.exists) revert UnknownBinding();
+        if (current.revoked) revert AlreadyRevoked();
+        if (runtimeNonce <= current.runtimeNonce) revert StaleNonce();
+        current.revoked = true;
+        current.runtimeNonce = runtimeNonce;
+        emit RuntimeBindingRevoked(bindingId, runtimeNonce);
+    }
+
+    function get(bytes32 bindingId) external view returns (Binding memory) {
+        return _bindings[bindingId];
+    }
+}
+
 contract CapabilityIssuer is RoleAddress {
     error MissingEvidence();
     error Mismatch();
@@ -1028,6 +1330,7 @@ contract CapabilityIssuer is RoleAddress {
 
     EvidenceRegistry public immutable evidence;
     PolicyRegistry public immutable policies;
+    RuntimeBindingRegistry public immutable runtimeBindings;
     address public immutable guardian;
     address public router;
     mapping(bytes32 => Capability) private _capabilities;
@@ -1042,12 +1345,15 @@ contract CapabilityIssuer is RoleAddress {
     event CapabilityRevoked(bytes32 indexed capabilityId);
     event AuthorityPaused(bytes32 indexed subject, uint8 indexed kind, bool paused);
 
-    constructor(address admin, address guardian_, address evidence_, address policies_)
+    constructor(address admin, address guardian_, address evidence_, address policies_, address runtimeBindings_)
         RoleAddress(admin)
     {
-        if (guardian_ == address(0)) revert ZeroAddress();
+        if (guardian_ == address(0) || evidence_ == address(0) || policies_ == address(0) || runtimeBindings_ == address(0)) {
+            revert ZeroAddress();
+        }
         evidence = EvidenceRegistry(evidence_);
         policies = PolicyRegistry(policies_);
+        runtimeBindings = RuntimeBindingRegistry(runtimeBindings_);
         guardian = guardian_;
     }
 
@@ -1093,8 +1399,6 @@ contract CapabilityIssuer is RoleAddress {
             revert BudgetExceeded();
         }
         if (approval.callCap > policy.callCeiling) revert BudgetExceeded();
-        if (policy.teeRequired) revert TEERequired();
-
         uint64 nowTime = uint64(block.timestamp);
         if (nowTime < approval.validAfter || nowTime >= approval.validUntil) revert InvalidWindow();
         if (
@@ -1113,6 +1417,18 @@ contract CapabilityIssuer is RoleAddress {
         if (status.validUntil < expiresAt) expiresAt = status.validUntil;
         uint64 ttlExpiry = nowTime + policy.capabilityTtl;
         if (ttlExpiry < expiresAt) expiresAt = ttlExpiry;
+        if (policy.teeRequired) {
+            uint64 teeValidUntil = _requireTEE(
+                orgId,
+                agentId,
+                releaseDigest,
+                approval.runtimeKey,
+                artifact.artifactRoot,
+                artifact.containerImageDigest,
+                nowTime
+            );
+            if (teeValidUntil < expiresAt) expiresAt = teeValidUntil;
+        }
         if (expiresAt <= nowTime) revert InvalidWindow();
 
         bytes32 binding = keccak256(abi.encode(orgId, agentId, releaseDigest, approval.runtimeKey, policyHash));
@@ -1164,12 +1480,53 @@ contract CapabilityIssuer is RoleAddress {
             emit CapabilityRevoked(capabilityId);
             revert PausedCapability();
         }
+        if (policy.teeRequired) {
+            EvidenceRegistry.ArtifactEvidence memory currentArtifact = evidence.getArtifact(
+                evidence.releaseKey(current.orgId, current.releaseDigest)
+            );
+            _requireTEE(
+                current.orgId,
+                current.agentId,
+                current.releaseDigest,
+                current.runtimeKey,
+                currentArtifact.artifactRoot,
+                currentArtifact.containerImageDigest,
+                uint64(block.timestamp)
+            );
+        }
         if (block.timestamp < current.notBefore || block.timestamp >= current.expiresAt) revert InvalidWindow();
         if (value > current.perCallValueCap || value > current.spendCap - current.spent) revert BudgetExceeded();
         if (current.callsUsed >= current.callCap) revert BudgetExceeded();
         current.spent += uint128(value);
         current.callsUsed += 1;
         return current;
+    }
+
+    function _requireTEE(
+        bytes32 orgId,
+        bytes32 agentId,
+        bytes32 releaseDigest,
+        address runtimeKey,
+        bytes32 artifactRoot,
+        bytes32 containerImageDigest,
+        uint64 nowTime
+    ) internal view returns (uint64 validUntil) {
+        RuntimeBindingRegistry.Binding memory binding = runtimeBindings.get(
+            runtimeBindings.bindingKey(orgId, agentId, releaseDigest, runtimeKey)
+        );
+        if (
+            !binding.exists
+                || binding.revoked
+                || binding.orgId != orgId
+                || binding.agentId != agentId
+                || binding.releaseDigest != releaseDigest
+                || binding.runtimeKey != runtimeKey
+                || binding.artifactRoot != artifactRoot
+                || binding.containerImageDigest != containerImageDigest
+                || nowTime < binding.validAfter
+                || nowTime >= binding.validUntil
+        ) revert TEERequired();
+        return binding.validUntil;
     }
 
     function revoke(bytes32 capabilityId) external {
@@ -1590,6 +1947,19 @@ contract MockBlockProver is IBlockProver {
         ContinuityProof calldata
     ) external view returns (bool) {
         return validProof[keccak256(encodedTransaction)];
+    }
+
+    function verify(
+        uint64,
+        uint64[] calldata,
+        bytes[] calldata encodedTransactions,
+        MerkleProof[] calldata,
+        ContinuityProof calldata
+    ) external view returns (bool) {
+        for (uint256 i; i < encodedTransactions.length; ++i) {
+            if (!validProof[keccak256(encodedTransactions[i])]) return false;
+        }
+        return true;
     }
 
     function calculateTxIndex(MerkleProof calldata proof) external pure returns (uint64 index) {
