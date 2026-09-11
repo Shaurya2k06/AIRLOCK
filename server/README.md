@@ -14,11 +14,18 @@ npm test
 npm start
 ```
 
-The API never accepts a private key. It is read-only against the chain; proof
-submission and runtime signing remain separate commands under `contracts`.
+The API never accepts a private key. `GET /api/runbook` exposes the complete
+terminal workflow and current saved status. `POST /api/runbook/execute` can
+run only its allowlisted steps, and write steps are disabled by default; set
+`AIRLOCK_ENABLE_WRITES=true` on the server to enable them. The browser still
+never sees `contracts/.env`. `AIRLOCK_COMMAND_TIMEOUT_MS` optionally bounds a
+command; the default is 15 minutes. Write steps also require the server to be
+bound to loopback (`HOST=127.0.0.1`, the default).
 
 Endpoints:
 
 - `GET /health`
 - `GET /api/overview`
+- `GET /api/runbook`
+- `POST /api/runbook/execute` with `{ "step": "preflight" }`
 - `POST /api/actions/simulate` with `{ "recipient": "0x4E…91c2", "amount": 24 }`

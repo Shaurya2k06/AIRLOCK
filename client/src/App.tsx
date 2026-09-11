@@ -63,28 +63,37 @@ type Overview = {
   mode: string
   dataSource: string
   network: { source: string; destination: string; chainKey: string }
-  release: { name: string; version: string; digest: string; status: string; expiresAt: string }
-  evidence: Array<{ kind: string; status: string; detail: string; txHash?: string; creditcoinTxHash?: string; sourceBlock?: number; logIndex?: number; receiptStatus?: number }>
+  release: { name: string; version: string; digest: string; status: string; expiresAt: string; manifestHash?: string; artifactRoot?: string }
+  evidence: Array<{ kind: string; status: string; detail: string; txHash?: string; creditcoinTxHash?: string; sourceChainKey?: number; sourceEmitter?: string; sourceTopic0?: string; sourceBlock?: number; logIndex?: number; receiptStatus?: number }>
   capability: { status: string; spendCap: number; spent: number; callCap: number; callsUsed: number; runtimeKey: string; scopeRoot?: string; expiresAt?: string }
   policy: { recipient: string; maxPayment: number; depositMax?: number }
   actions: Array<{ action: string; target: string; amount: number; state: string; age: string }>
 }
 
-type DisplayEvidence = { label: string; detail: string; time?: string; status: string; icon: IconName; txHash?: string; creditcoinTxHash?: string; sourceBlock?: number; logIndex?: number; receiptStatus?: number }
+type DisplayEvidence = { label: string; detail: string; time?: string; status: string; icon: IconName; txHash?: string; creditcoinTxHash?: string; sourceChainKey?: number; sourceEmitter?: string; sourceTopic0?: string; sourceBlock?: number; logIndex?: number; receiptStatus?: number }
+type RunbookStep = { id: string; label: string; command: string; kind: string; status: string; canRun: boolean; requiresWrite: boolean }
+type Runbook = { mode: string; writesEnabled: boolean; steps: RunbookStep[] }
+const API_URL = (import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8787').replace(/\/$/, '')
 
-function App() {
+function DemoPage({ onHome }: { onHome: () => void }) {
   const [activeNav, setActiveNav] = useState('Overview')
   const [paused, setPaused] = useState(false)
   const [simulation, setSimulation] = useState<'idle' | 'allowed' | 'blocked'>('idle')
   const [simulationReason, setSimulationReason] = useState('')
   const [overview, setOverview] = useState<Overview | null>(null)
+  const [runbook, setRunbook] = useState<Runbook | null>(null)
+  const [runbookRunning, setRunbookRunning] = useState('')
+  const [runbookMessage, setRunbookMessage] = useState('')
   const [loadError, setLoadError] = useState(false)
 
   useEffect(() => {
     let mounted = true
-    fetch(`${import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8787'}/api/overview`)
+    fetch(`${API_URL}/api/overview`)
       .then((response) => response.json().then((value: Overview) => { if (mounted) { setOverview(value); setLoadError(false) }; return value }))
       .catch(() => { if (mounted) setLoadError(true) })
+    fetch(`${API_URL}/api/runbook`)
+      .then((response) => response.json().then((value: Runbook) => { if (mounted) setRunbook(value); return value }))
+      .catch(() => { if (mounted) setRunbook(null) })
     return () => { mounted = false }
   }, [])
 
@@ -93,7 +102,7 @@ function App() {
   const displayOverview = chainUnavailable ? null : overview
   const displayEvidence: DisplayEvidence[] = chainUnavailable
     ? evidence.map((item) => ({ ...item, detail: 'chain data unavailable', status: 'UNAVAILABLE', time: '—' }))
-    : displayOverview?.evidence.map((item, index) => ({ label: item.kind, detail: item.detail, status: item.status, time: 'chain', icon: evidence[index]?.icon ?? 'box', txHash: item.txHash, creditcoinTxHash: item.creditcoinTxHash, sourceBlock: item.sourceBlock, logIndex: item.logIndex, receiptStatus: item.receiptStatus })) ?? evidence
+    : displayOverview?.evidence.map((item, index) => ({ label: item.kind, detail: item.detail, status: item.status, time: 'chain', icon: evidence[index]?.icon ?? 'box', txHash: item.txHash, creditcoinTxHash: item.creditcoinTxHash, sourceChainKey: item.sourceChainKey, sourceEmitter: item.sourceEmitter, sourceTopic0: item.sourceTopic0, sourceBlock: item.sourceBlock, logIndex: item.logIndex, receiptStatus: item.receiptStatus })) ?? evidence
   const displayActivity = chainUnavailable
     ? []
     : displayOverview ? displayOverview.actions.map((item) => ({ ...item, amount: `$${item.amount.toFixed(2)}`, state: item.state.includes('Allowed') ? 'Allowed' : 'Blocked' })) : activity
@@ -116,7 +125,7 @@ function App() {
     const recipient = blocked ? '0x0000000000000000000000000000000000000001' : displayOverview?.policy.recipient ?? '0x4E…91c2'
     const amount = blocked ? 24 : Math.min(24, displayOverview?.policy.maxPayment ?? 250)
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8787'}/api/actions/simulate`, {
+      const response = await fetch(`${API_URL}/api/actions/simulate`, {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ recipient, amount }),
       })
       if (!response.ok) throw new Error('control plane unavailable; no chain decision available')
@@ -129,13 +138,34 @@ function App() {
     }
   }
 
+  const executeRunbook = async (step: RunbookStep) => {
+    setRunbookRunning(step.id)
+    setRunbookMessage('')
+    try {
+      const response = await fetch(`${API_URL}/api/runbook/execute`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ step: step.id }),
+      })
+      const result = await response.json() as { ok?: boolean; output?: string; error?: string; runbook?: Runbook }
+      if (result.runbook) setRunbook(result.runbook)
+      setRunbookMessage(result.output || result.error || (result.ok ? 'step complete' : 'step failed'))
+      if (result.ok) {
+        const refreshed = await fetch(`${API_URL}/api/overview`)
+        if (refreshed.ok) setOverview(await refreshed.json() as Overview)
+      }
+    } catch {
+      setRunbookMessage('control plane unavailable; no terminal action was started')
+    } finally {
+      setRunbookRunning('')
+    }
+  }
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand">
+        <button className="brand brand-link" onClick={onHome} aria-label="Back to AIRLOCK landing page">
           <div className="brand-mark"><span /></div>
           <div><div className="brand-name">AIRLOCK</div><div className="brand-subtitle">release firewall</div></div>
-        </div>
+        </button>
         <div className="network-status"><span className="status-dot" /> CC3 TESTNET <span className="network-chevron">⌄</span></div>
         <div className="nav-label">Workspace</div>
         <nav className="nav-list" aria-label="Workspace navigation">
@@ -144,6 +174,7 @@ function App() {
             ['Evidence graph', 'shield'],
             ['Capabilities', 'lock'],
             ['Action log', 'activity'],
+            ['Runbook', 'terminal'],
           ].map(([label, icon]) => (
             <button key={label} className={`nav-item ${activeNav === label ? 'active' : ''}`} onClick={() => setActiveNav(label)}>
               <Icon name={icon as IconName} size={17} /><span>{label}</span>{label === 'Evidence graph' && <span className="nav-count">4</span>}
@@ -153,7 +184,7 @@ function App() {
         <div className="sidebar-bottom">
           <div className="nav-label">Current release</div>
           <div className="release-mini"><div className="release-mini-icon"><Icon name="box" size={16} /></div><div className="release-mini-copy"><strong>{release.name}</strong><span>v{release.version} · {releaseStatus.toLowerCase()}</span></div><span className="mini-check"><Icon name="check" size={12} /></span></div>
-          <button className="settings-button"><Icon name="terminal" size={16} /><span>Runbook & settings</span></button>
+          <button className="settings-button" onClick={() => setActiveNav('Runbook')}><Icon name="terminal" size={16} /><span>Runbook & settings</span></button>
           <div className="user-row"><div className="avatar">NS</div><div><strong>Northstar Labs</strong><span>Policy admin</span></div><Icon name="chevron" size={15} /></div>
         </div>
       </aside>
@@ -174,19 +205,47 @@ function App() {
             <div className="panel activity-panel"><div className="panel-header"><div><div className="panel-kicker">RECENT ACTIVITY</div><h2>Enforcement log</h2></div><button className="text-button" onClick={() => setActiveNav('Action log')}>View all <Icon name="arrow" size={14} /></button></div><div className="activity-table"><div className="table-head"><span>Action</span><span>Value</span><span>Result</span></div>{displayActivity.map((row) => <div className="table-row" key={`${row.action}-${row.age}`}><div><strong>{row.action}</strong><small>{row.target} · {row.age}</small></div><span>{row.amount}</span><b className={row.state === 'Allowed' ? 'allowed' : 'blocked'}><span />{row.state}</b></div>)}</div></div></section>
         </div>}
 
-        {activeNav !== 'Overview' && <DetailView activeNav={activeNav} onBack={() => setActiveNav('Overview')} evidenceItems={displayEvidence} capability={displayCapability} activity={displayActivity} fixtureMode={!liveData && !chainUnavailable} unavailable={chainUnavailable} />}
+        {activeNav !== 'Overview' && <DetailView activeNav={activeNav} onBack={() => setActiveNav('Overview')} evidenceItems={displayEvidence} capability={displayCapability} activity={displayActivity} fixtureMode={!liveData && !chainUnavailable} unavailable={chainUnavailable} runbook={runbook} runbookRunning={runbookRunning} runbookMessage={runbookMessage} onRunbookStep={executeRunbook} />}
       </main>
     </div>
   )
 }
 
-function DetailView({ activeNav, onBack, evidenceItems, capability, activity: displayActivity, fixtureMode, unavailable }: { activeNav: string; onBack: () => void; evidenceItems: DisplayEvidence[]; capability?: Overview['capability']; activity: Array<{ action: string; target: string; amount: number | string; state: string; age: string }>; fixtureMode: boolean; unavailable: boolean }) {
-  const titles: Record<string, string> = { 'Evidence graph': 'Evidence inspector', Capabilities: 'Capability registry', 'Action log': 'Action log' }
+function DetailView({ activeNav, onBack, evidenceItems, capability, activity: displayActivity, fixtureMode, unavailable, runbook, runbookRunning, runbookMessage, onRunbookStep }: { activeNav: string; onBack: () => void; evidenceItems: DisplayEvidence[]; capability?: Overview['capability']; activity: Array<{ action: string; target: string; amount: number | string; state: string; age: string }>; fixtureMode: boolean; unavailable: boolean; runbook: Runbook | null; runbookRunning: string; runbookMessage: string; onRunbookStep: (step: RunbookStep) => void }) {
+  const titles: Record<string, string> = { 'Evidence graph': 'Evidence inspector', Capabilities: 'Capability registry', 'Action log': 'Action log', Runbook: 'Terminal runbook' }
   return <div className="detail-page"><div className="page-heading"><div><div className="eyebrow"><span className="eyebrow-line" /> AIRLOCK / INSPECTOR</div><h1>{titles[activeNav]}</h1><p>Verified state from the current release firewall.</p></div><button className="secondary-button" onClick={onBack}><Icon name="arrow" size={15} /> Back to overview</button></div>
-    {activeNav === 'Evidence graph' && <div className="detail-grid">{evidenceItems.map((item) => <div className="panel detail-card" key={item.label}><div className="detail-card-top"><div className="evidence-node"><Icon name={item.icon} size={18} /><span className="node-check"><Icon name="check" size={10} /></span></div><span className="verified-badge"><Icon name="check" size={12} /> {item.status}</span></div><h2>{item.label}</h2><p>{item.detail}</p><code>{item.txHash ? `${item.txHash.slice(0, 10)}…${item.txHash.slice(-8)} · log ${item.logIndex ?? '—'}` : item.time ?? 'chain data'}</code><div className="detail-meta"><span>Ethereum Sepolia · block {item.sourceBlock ?? '—'}</span><span>{item.receiptStatus === 1 ? 'receipt status 1' : item.status === 'PROVEN' ? 'receipt metadata pending' : 'not verified'}</span></div>{item.creditcoinTxHash && <small>Creditcoin import: {item.creditcoinTxHash.slice(0, 10)}…{item.creditcoinTxHash.slice(-8)}</small>}</div>)}</div>}
+    {activeNav === 'Evidence graph' && <div className="detail-grid">{evidenceItems.map((item) => <div className="panel detail-card" key={item.label}><div className="detail-card-top"><div className="evidence-node"><Icon name={item.icon} size={18} /><span className="node-check"><Icon name="check" size={10} /></span></div><span className="verified-badge"><Icon name="check" size={12} /> {item.status}</span></div><h2>{item.label}</h2><p>{item.detail}</p><code>{item.txHash ? `${item.txHash.slice(0, 10)}…${item.txHash.slice(-8)} · log ${item.logIndex ?? '—'}` : item.time ?? 'chain data'}</code><div className="detail-meta"><span>{item.sourceChainKey ? `chain key ${item.sourceChainKey}` : 'Ethereum Sepolia'} · block {item.sourceBlock ?? '—'}</span><span>{item.receiptStatus === 1 ? 'receipt status 1' : item.status === 'PROVEN' ? 'receipt metadata pending' : 'not verified'}</span></div>{item.sourceEmitter && <small>Emitter: {item.sourceEmitter.slice(0, 10)}…{item.sourceEmitter.slice(-8)} · event: {item.label}</small>}{item.creditcoinTxHash && <small>Creditcoin import: {item.creditcoinTxHash.slice(0, 10)}…{item.creditcoinTxHash.slice(-8)}</small>}</div>)}</div>}
     {activeNav === 'Capabilities' && <div className="panel capability-detail"><div className="capability-summary"><div className="capability-lock"><Icon name="lock" size={24} /></div><div><div className="panel-kicker">CAPABILITY ID</div><h2>chain capability</h2><p>Non-transferable authority bound to <code>{capability?.runtimeKey ?? (fixtureMode ? '0x8B31…6A14' : '—')}</code></p></div><span className="verified-badge"><Icon name="check" size={12} /> {unavailable ? 'UNAVAILABLE' : capability?.status ?? 'FIXTURE'}</span></div><div className="capability-grid"><div><span>Scope root</span><strong>{unavailable ? '—' : capability?.scopeRoot ?? 'fixture'}</strong></div><div><span>Total spend</span><strong>{unavailable ? '—' : `$${capability?.spent.toFixed(2) ?? '130.00'} / $${capability?.spendCap.toFixed(2) ?? '350.00'}`}</strong></div><div><span>Calls used</span><strong>{unavailable ? '—' : `${capability?.callsUsed ?? 2} / ${capability?.callCap ?? 4}`}</strong></div><div><span>Valid until</span><strong>{unavailable ? '—' : capability?.expiresAt ?? 'status evidence'}</strong></div></div><div className="boundary-note"><Icon name="shield" size={14} /> {unavailable ? 'No chain decision available.' : 'Every action is revalidated against current release status.'}</div></div>}
     {activeNav === 'Action log' && <div className="panel full-table"><div className="panel-header"><div><div className="panel-kicker">CHAIN-BOUND EVENTS</div><h2>All enforcement decisions</h2></div><span className="live-pill"><span className="status-dot" /> {fixtureMode ? 'fixture' : 'indexed'}</span></div><div className="expanded-table">{(fixtureMode ? displayActivity.concat([{ action: 'vault.withdraw', target: 'direct call', amount: '—', state: 'Blocked', age: '2h ago' }]) : displayActivity).map((row) => <div className="expanded-row" key={`${row.action}-${row.age}`}><span className="row-time">{row.age}</span><div><strong>{row.action}</strong><small>{row.target}</small></div><span>{typeof row.amount === 'number' ? `$${row.amount.toFixed(2)}` : row.amount}</span><b className={row.state === 'Allowed' ? 'allowed' : 'blocked'}><span />{row.state}</b><Icon name="external" size={15} /></div>)}</div></div>}
+    {activeNav === 'Runbook' && <div className="panel runbook-panel"><div className="panel-header"><div><div className="panel-kicker">CONTROL PLANE WORKFLOW</div><h2>Terminal actions, surfaced safely</h2><p className="panel-description">Read-only checks run from the server. Write steps stay disabled until the server explicitly enables them.</p></div><span className={`runbook-mode ${runbook?.writesEnabled ? 'enabled' : ''}`}><span className="status-dot" /> {runbook?.writesEnabled ? 'writes enabled' : 'writes disabled'}</span></div>{runbookMessage && <pre className="runbook-output">{runbookMessage}</pre>}<div className="runbook-list">{runbook?.steps.map((step) => <div className="runbook-row" key={step.id}><div className="runbook-status"><span className={`runbook-dot ${step.status.toLowerCase()}`} /></div><div className="runbook-copy"><strong>{step.label}</strong><span>{step.status.toLowerCase()} · {step.kind}</span><code>{step.command}</code></div><button className={step.requiresWrite ? 'secondary-button' : 'primary-button'} disabled={!step.canRun || runbookRunning !== ''} onClick={() => onRunbookStep(step)}>{runbookRunning === step.id ? 'Running…' : step.status === 'COMPLETE' ? 'Run again' : 'Run'}</button></div>) ?? <div className="runbook-empty">Runbook unavailable. Start the server and refresh the demo.</div>}</div></div>}
   </div>
+}
+
+function LandingPage({ onEnterDemo }: { onEnterDemo: () => void }) {
+  const [health, setHealth] = useState<'checking' | 'ready' | 'offline'>('checking')
+
+  useEffect(() => {
+    fetch(`${API_URL}/health`).then((response) => setHealth(response.ok ? 'ready' : 'offline')).catch(() => setHealth('offline'))
+  }, [])
+
+  return <div className="landing-page"><header className="landing-nav"><button className="brand brand-link" aria-label="AIRLOCK home"><div className="brand-mark"><span /></div><div><div className="brand-name">AIRLOCK</div><div className="brand-subtitle">release firewall</div></div></button><div className="landing-nav-actions"><span className="landing-health"><span className={`status-dot ${health === 'offline' ? 'offline' : ''}`} /> {health === 'ready' ? 'control plane online' : health === 'offline' ? 'start control plane' : 'checking control plane'}</span><button className="secondary-button" onClick={onEnterDemo}>Open demo <Icon name="arrow" size={15} /></button></div></header><main className="landing-main"><section className="landing-hero"><div className="eyebrow"><span className="eyebrow-line" /> CROSS-CHAIN RELEASE FIREWALL</div><h1>Give an agent a capability.<br /><em>Make the release prove it.</em></h1><p className="landing-lede">AIRLOCK binds what an autonomous agent can do to one verified release digest—across source evidence, Creditcoin proofs, policy, and revocation.</p><div className="landing-actions"><button className="primary-button" onClick={onEnterDemo}>Open live demo <Icon name="arrow" size={15} /></button><span><Icon name="lock" size={14} /> No private keys in the browser</span></div></section><section className="landing-proof"><div className="landing-proof-head"><span>THE CONTROL LOOP</span><code>SEPOLIA → ATTESTCOIN → CREDITCOIN</code></div><div className="landing-proof-grid"><div><span className="landing-proof-index">01</span><strong>Prove the release</strong><p>Artifact, evaluation, approval, and status are anchored to one digest.</p></div><div><span className="landing-proof-index">02</span><strong>Issue bounded authority</strong><p>Capabilities carry scope, value ceilings, call budgets, and expiry.</p></div><div><span className="landing-proof-index">03</span><strong>Revalidate every call</strong><p>Allowed actions pass the boundary. Revoked releases stop the next one.</p></div></div></section><section className="landing-footer-card"><div><div className="panel-kicker">BUILT FOR THE DEMO</div><h2>Watch the evidence become enforcement.</h2></div><button className="text-button" onClick={onEnterDemo}>Enter the control plane <Icon name="arrow" size={14} /></button></section></main></div>
+}
+
+function App() {
+  const [route, setRoute] = useState(window.location.pathname === '/demo' ? '/demo' : '/')
+
+  useEffect(() => {
+    const onPopState = () => setRoute(window.location.pathname === '/demo' ? '/demo' : '/')
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
+
+  const navigate = (path: '/' | '/demo') => {
+    window.history.pushState({}, '', path)
+    setRoute(path)
+  }
+
+  return route === '/demo' ? <DemoPage onHome={() => navigate('/')} /> : <LandingPage onEnterDemo={() => navigate('/demo')} />
 }
 
 export default App

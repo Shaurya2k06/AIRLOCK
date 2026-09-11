@@ -1,12 +1,17 @@
 const http = require('node:http')
 const fs = require('node:fs/promises')
 const path = require('node:path')
+const { spawn } = require('node:child_process')
 const { Contract, JsonRpcProvider, formatEther } = require('ethers')
 
 const port = Number(process.env.PORT || 8787)
 const host = process.env.HOST || '127.0.0.1'
 const maxBodyBytes = 16 * 1024
 const deploymentsFile = process.env.AIRLOCK_DEPLOYMENTS || path.join(__dirname, '..', 'deployments.json')
+const contractsDir = path.join(__dirname, '..', 'contracts')
+const commandTimeoutMs = Number(process.env.AIRLOCK_COMMAND_TIMEOUT_MS || 15 * 60 * 1000)
+const localHosts = new Set(['127.0.0.1', 'localhost', '::1'])
+let activeRunbookJob = false
 
 const fixtureState = {
   mode: 'fixture',
@@ -152,6 +157,85 @@ async function overview() {
   return liveOverview(await readDeployment())
 }
 
+function runbook(deployment) {
+  const proofs = deployment?.proofs || {}
+  const live = deployment?.live || {}
+  const writesEnabled = process.env.AIRLOCK_ENABLE_WRITES === 'true'
+  const complete = (value) => Boolean(value)
+  const steps = [
+    { id: 'preflight', label: 'Preflight checks', command: 'npm run live:check', kind: 'read-only', status: 'READY', canRun: true },
+    { id: 'deploy', label: 'Deploy and seed release', command: 'npm run deploy-live', kind: 'write', status: complete(deployment) ? 'COMPLETE' : 'READY', canRun: writesEnabled },
+    ...['artifact', 'evaluation', 'approval', 'status'].map((kind) => ({
+      id: `proof-${kind}`,
+      label: `Import ${kind} proof`,
+      command: `IMPORT_KIND=${kind} npm run import-proof`,
+      kind: 'write',
+      status: complete(proofs[kind]?.creditcoinTxHash) ? 'COMPLETE' : 'READY',
+      canRun: writesEnabled,
+      env: { IMPORT_KIND: kind },
+    })),
+    { id: 'execute', label: 'Issue capability and run allowed call', command: 'LIVE_STEP=execute npm run live-step', kind: 'write', status: complete(live.allowedActionTx) ? 'COMPLETE' : 'READY', canRun: writesEnabled, env: { LIVE_STEP: 'execute' } },
+    { id: 'deposit', label: 'Run bounded deposit', command: 'LIVE_STEP=deposit npm run live-step', kind: 'write', status: complete(live.depositActionTx) ? 'COMPLETE' : 'READY', canRun: writesEnabled, env: { LIVE_STEP: 'deposit' } },
+    { id: 'revoke', label: 'Revoke release', command: 'LIVE_STEP=revoke npm run live-step', kind: 'write', status: complete(deployment?.source?.transactions?.revocationTx) ? 'COMPLETE' : 'READY', canRun: writesEnabled, env: { LIVE_STEP: 'revoke' } },
+    { id: 'proof-revocation', label: 'Import revocation proof', command: 'IMPORT_KIND=revocation npm run import-proof', kind: 'write', status: complete(proofs.revocation?.creditcoinTxHash) ? 'COMPLETE' : 'READY', canRun: writesEnabled, env: { IMPORT_KIND: 'revocation' } },
+    { id: 'blocked', label: 'Verify blocked post-revocation call', command: 'LIVE_STEP=blocked npm run live-step', kind: 'write', status: complete(live.blockedAction) ? 'COMPLETE' : 'READY', canRun: writesEnabled, env: { LIVE_STEP: 'blocked' } },
+  ]
+  return {
+    mode: deployment && process.env.CREDITCOIN_RPC_URL ? 'live' : 'fixture',
+    writesEnabled,
+    steps: steps.map(({ env, ...step }) => ({ ...step, requiresWrite: step.kind === 'write' })),
+  }
+}
+
+const runbookCommands = new Map([
+  ['preflight', { args: ['run', 'live:check'] }],
+  ['deploy', { args: ['run', 'deploy-live'] }],
+  ['proof-artifact', { args: ['run', 'import-proof'], env: { IMPORT_KIND: 'artifact' } }],
+  ['proof-evaluation', { args: ['run', 'import-proof'], env: { IMPORT_KIND: 'evaluation' } }],
+  ['proof-approval', { args: ['run', 'import-proof'], env: { IMPORT_KIND: 'approval' } }],
+  ['proof-status', { args: ['run', 'import-proof'], env: { IMPORT_KIND: 'status' } }],
+  ['execute', { args: ['run', 'live-step'], env: { LIVE_STEP: 'execute' } }],
+  ['deposit', { args: ['run', 'live-step'], env: { LIVE_STEP: 'deposit' } }],
+  ['revoke', { args: ['run', 'live-step'], env: { LIVE_STEP: 'revoke' } }],
+  ['proof-revocation', { args: ['run', 'import-proof'], env: { IMPORT_KIND: 'revocation' } }],
+  ['blocked', { args: ['run', 'live-step'], env: { LIVE_STEP: 'blocked' } }],
+])
+
+function executeRunbookStep(stepId) {
+  const command = runbookCommands.get(stepId)
+  if (!command) return Promise.resolve({ ok: false, code: null, output: 'unknown runbook step' })
+  return new Promise((resolve) => {
+    const output = []
+    let outputSize = 0
+    let timedOut = false
+    const append = (chunk) => {
+      if (outputSize >= 64 * 1024) return
+      const text = chunk.toString()
+      output.push(text.slice(0, 64 * 1024 - outputSize))
+      outputSize += text.length
+    }
+    const child = spawn('npm', command.args, {
+      cwd: contractsDir,
+      env: { ...process.env, ...command.env },
+      shell: false,
+    })
+    child.stdout.on('data', append)
+    child.stderr.on('data', append)
+    const timer = setTimeout(() => {
+      timedOut = true
+      child.kill('SIGTERM')
+    }, Number.isFinite(commandTimeoutMs) && commandTimeoutMs > 0 ? commandTimeoutMs : 15 * 60 * 1000)
+    child.on('error', (error) => {
+      clearTimeout(timer)
+      resolve({ ok: false, code: null, output: `${output.join('')}\n${error.message}`.trim() })
+    })
+    child.on('close', (code) => {
+      clearTimeout(timer)
+      resolve({ ok: code === 0 && !timedOut, code, output: `${output.join('')}${timedOut ? '\ncommand timed out' : ''}`.trim() })
+    })
+  })
+}
+
 function body(request) {
   return new Promise((resolve, reject) => {
     let size = 0
@@ -215,6 +299,37 @@ const server = http.createServer(async (request, response) => {
     }
     return
   }
+  if (request.method === 'GET' && url.pathname === '/api/runbook') {
+    try {
+      json(response, 200, runbook(await readDeployment()))
+    } catch (error) {
+      json(response, 503, { error: error.message })
+    }
+    return
+  }
+  if (request.method === 'POST' && url.pathname === '/api/runbook/execute') {
+    try {
+      const { step } = await body(request)
+      const deployment = await readDeployment()
+      const selected = runbook(deployment).steps.find((item) => item.id === step)
+      if (!selected) return json(response, 400, { ok: false, error: 'unknown runbook step' })
+      if (selected.requiresWrite && process.env.AIRLOCK_ENABLE_WRITES !== 'true') {
+        return json(response, 403, { ok: false, error: 'write actions are disabled; set AIRLOCK_ENABLE_WRITES=true on the server' })
+      }
+      if (selected.requiresWrite && !localHosts.has(host)) {
+        return json(response, 403, { ok: false, error: 'write actions require a loopback-bound server' })
+      }
+      if (activeRunbookJob) return json(response, 409, { ok: false, error: 'another runbook action is already running' })
+      activeRunbookJob = true
+      const result = await executeRunbookStep(step)
+      activeRunbookJob = false
+      json(response, result.ok ? 200 : 400, { ...result, runbook: runbook(await readDeployment()) })
+    } catch (error) {
+      activeRunbookJob = false
+      json(response, 400, { ok: false, error: error.message })
+    }
+    return
+  }
   if (request.method === 'POST' && url.pathname === '/api/actions/simulate') {
     try {
       const current = await overview()
@@ -229,4 +344,4 @@ const server = http.createServer(async (request, response) => {
 
 if (require.main === module) server.listen(port, host, () => console.log(`AIRLOCK API listening on http://${host}:${port}`))
 
-module.exports = { server, simulate, state: fixtureState, overview, timestamp }
+module.exports = { server, simulate, state: fixtureState, overview, runbook, timestamp }

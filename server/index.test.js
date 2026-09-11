@@ -1,6 +1,6 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { simulate, timestamp } = require('./index')
+const { simulate, runbook, timestamp } = require('./index')
 
 test('simulation blocks unapproved recipients and accepts bounded payments', () => {
   assert.deepEqual(simulate({ recipient: '0xnope', amount: 24 }).allowed, false)
@@ -23,4 +23,15 @@ test('live simulation blocks inactive chain state before policy checks', () => {
 test('timestamp treats uint64 revocation sentinel as unbounded', () => {
   assert.equal(timestamp(2n ** 64n - 1n), '—')
   assert.equal(timestamp(1700000000), '2023-11-14T22:13:20.000Z')
+})
+
+test('runbook exposes the complete terminal workflow without secrets', () => {
+  const value = runbook({ proofs: { artifact: { creditcoinTxHash: '0xproof' } }, live: { allowedActionTx: '0xaction' } })
+  assert.deepEqual(value.steps.map((step) => step.id), [
+    'preflight', 'deploy', 'proof-artifact', 'proof-evaluation', 'proof-approval', 'proof-status',
+    'execute', 'deposit', 'revoke', 'proof-revocation', 'blocked',
+  ])
+  assert.equal(value.steps.find((step) => step.id === 'proof-artifact').status, 'COMPLETE')
+  assert.equal(value.steps.find((step) => step.id === 'execute').status, 'COMPLETE')
+  assert.equal(value.steps.some((step) => JSON.stringify(step).includes('PRIVATE_KEY')), false)
 })

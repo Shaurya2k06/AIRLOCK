@@ -39,10 +39,12 @@ After the four imports, `LIVE_STEP=execute npm run live-step` runs the allowed
 action; `LIVE_STEP=revoke`, a revocation proof import, and
 `LIVE_STEP=blocked` complete the negative path.
 
-The read-only dashboard uses only `CREDITCOIN_RPC_URL` and the generated
-`deployments.json`; the Vite client optionally uses `VITE_API_URL` (default
-`http://127.0.0.1:8787`). Public live addresses, receipts, proof metrics, and
-enforcement results are recorded in [`docs/evidence.md`](docs/evidence.md) and
+The dashboard uses only `CREDITCOIN_RPC_URL` and the generated
+`deployments.json` for live reads; the Vite client optionally uses
+`VITE_API_URL` (default `http://127.0.0.1:8787`). The `/demo` runbook can
+surface the terminal workflow and, only with `AIRLOCK_ENABLE_WRITES=true` on a
+loopback-bound server, run its allowlisted commands. Public live addresses,
+receipts, proof metrics, and enforcement results are recorded in [`docs/evidence.md`](docs/evidence.md) and
 [`docs/deployment-manifest.json`](docs/deployment-manifest.json). A second
 clean-clone live rehearsal is recorded in [`docs/rehearsal.md`](docs/rehearsal.md).
 The generated evidence walkthrough is [`docs/demo-video.mp4`](docs/demo-video.mp4);
