@@ -1,0 +1,162 @@
+{
+  "generatedAt": "2026-09-11T02:45:51.195Z",
+  "source": {
+    "chainId": 11155111,
+    "chainKey": 1,
+    "roles": {
+      "deployer": "0x4C3F5a84041E562928394d63b3E339bE70DBcC17",
+      "publisher": "0xADB310c1a1aa4e933844b7A55763A495bF338499",
+      "evaluator": "0x6A530Eb0202F9e797679A62931E15985a0deB9c6",
+      "approver": "0xa77C5c96A8c1c87c59f6D82adAf07adA543b0BCC",
+      "statusAuthority": "0x3A4A6aC0cC3698d96fa0903F0f085E95E34B9A03"
+    },
+    "artifactRegistry": "0xe2817553339aCFC3a16DFDe0C2e858e10b617017",
+    "evaluationRegistry": "0x0549a6e3aE3cf058BE3d20FBECe468e6c234b76b",
+    "approvalRegistry": "0x6031c4818E94beC3D909188312F8dB0001db6d1d",
+    "statusRegistry": "0xC2fFBDFF6f4C29Dc3D506534ffcc91B67f5618D0",
+    "transactions": {
+      "artifactTx": "0x444a13f744582ff57802057b1737ccf3f86c9e8b220fbf737926ae0ea5726bf1",
+      "evaluationTx": "0xc4bccce810a22c764f83cbc1ce2650b3f4166087109052c0973a93d69778b257",
+      "approvalTx": "0xd31d96c805cd9eb500e3d434d2566cc4c1aba0402dce020e68003e23ebbfeaac",
+      "statusTx": "0x32a7450775f33be76fada63fb9a3b639ca357fd8b8cf65a221394f3cc25fc581",
+      "revocationTx": "0x3231c60436ee086643f41a5e853a1b32edbe88f30405a4fb910cd0590876a167"
+    }
+  },
+  "creditcoin": {
+    "chainId": 102031,
+    "blockProver": "0x0000000000000000000000000000000000000fd2",
+    "roles": {
+      "deployer": "0xB3c52E8E8902c0e3F162f39389eEC4638ce162cC",
+      "worker": "0x57f7B043041b545ab4386c004F72bEa3eeAa8cA0",
+      "policyAdmin": "0xB6Bd887d89646D4A5a598dBDa7c2c97C2c43e8dB",
+      "guardian": "0x22226E779F0B00301aFD08da175ac289B87Db009",
+      "runtime": "0x28FD5AA616FC88DD22D606e182F36CE8d8bED974"
+    },
+    "decoder": "0x9c3E58A02803BA1c3F9AD92fbac9DeAF26429467",
+    "evidence": "0x25F25A9604783CFecAff97e90B0927d006B11C1a",
+    "adapter": "0x8B85fC6c3295a442e158eD88CBAEa1c6A9D2676d",
+    "policies": "0x039DAfa5FaB66797Df264b251d07FBaC06f7a2B8",
+    "issuer": "0xB63a439a53490006b136d332fb0433A6d3208C16",
+    "vault": "0x8d3344a2d5780c83E1a887AbaeFcCcdBfF1A3bA3",
+    "router": "0xC2B3B8D4bc80409FB17C74B6C0dfC808f234Ca76",
+    "paymentToken": "0x4f55c93d57dB7c64bF6a6384EC6C74e3f838d124",
+    "protocol": "0x4A72223f069E0066Ed8B624bCf35C582bbCE8ff9",
+    "paymentValidator": "0x1919318D729FCf06AA9197b34E227F9fe04139B6",
+    "depositValidator": "0x2C975DfCf837969bc19fcA27930Ad1E40CB2055c",
+    "vaultFundingTx": "0x71f2ecaaf239bfa5483219b8e6ad427ff50505825af462398dc980eccca6d016"
+  },
+  "release": {
+    "orgId": "0x19f14d9c15d90b47249d88d3fb11ada9dda7ba4d690fc48c533d1217ee726fa0",
+    "releaseId": "0x8e0a115b6ca14dc079f590175807a4ef26d840174a4e5bdeaed593f888f6324b",
+    "agentId": "0xc9bb4c9317790d917fe2da888cda19c1c96a65a7b8393ec0959bc352361d8c31",
+    "releaseDigest": "0x29f4f4adeda033296787e13806c9634b6c00f984035ac1605f21fdd21ffddecc",
+    "releaseVersion": 1,
+    "manifestHash": "0x0012b5d8bc3785a644ba5dc270b56e9b25507d661ddf13effd8f26c0e55b43f3",
+    "artifactRoot": "0xe7b55ed2c63a87e94b60b7e90052f43a411a6bbfe1cbe38add7bf44fe269c322",
+    "policyHash": "0x460c17c0044cc16883183ad9ecc9e78e425ccbaf2ee469deaba209c5cf867b21",
+    "scopeRoot": "0x40f775477891f156919c91d48025c10865db151cf7fe5c930d45a11d7f954ce0",
+    "paymentLeaf": "0xee4194ed936aad0c33ca6e86a55d25988f68dc8bc8008d6522e177eb15c250a3",
+    "depositLeaf": "0x267f28cab776259f6c073eb2fa62ced3ed35faa62f1fbf44bdfc1b6a25b8d70e",
+    "runtimeKey": "0x28FD5AA616FC88DD22D606e182F36CE8d8bED974",
+    "paymentRecipient": "0x4C3F5a84041E562928394d63b3E339bE70DBcC17",
+    "paymentAmount": "10000000000000000",
+    "depositTarget": "0x3049a0d77ba20463282b0542532fb084162df4e09ad6d38982ee4bdbad36e62d",
+    "depositAmount": "100000000000000000"
+  },
+  "proofs": {
+    "artifact": {
+      "kind": "artifact",
+      "txHash": "0x444a13f744582ff57802057b1737ccf3f86c9e8b220fbf737926ae0ea5726bf1",
+      "sourceChainKey": 1,
+      "sourceBlock": 11679084,
+      "sourceTxIndex": 130,
+      "logIndex": 0,
+      "sourceEmitter": "0xe2817553339aCFC3a16DFDe0C2e858e10b617017",
+      "sourceTopic0": "0xf7a75d6b39bdebba2ce7d671952d12de7999a80a1b19410ef990a6f65f01fb26",
+      "receiptStatus": 1,
+      "proofBytes": 2400,
+      "merkleSiblingCount": 8,
+      "creditcoinTxHash": "0x431257721df68650444414a9ef91cd2361a9fe7614ceb1f8e806f0461137b8cb",
+      "creditcoinGasUsed": "471418",
+      "cachedProof": true
+    },
+    "evaluation": {
+      "kind": "evaluation",
+      "txHash": "0xc4bccce810a22c764f83cbc1ce2650b3f4166087109052c0973a93d69778b257",
+      "sourceChainKey": 1,
+      "sourceBlock": 11679085,
+      "sourceTxIndex": 105,
+      "logIndex": 0,
+      "sourceEmitter": "0x0549a6e3aE3cf058BE3d20FBECe468e6c234b76b",
+      "sourceTopic0": "0xd158796b70c6347151daaf6413cac32f6d7c3012ad4ba03a00f78a6544373282",
+      "receiptStatus": 1,
+      "proofBytes": 2208,
+      "merkleSiblingCount": 8,
+      "creditcoinTxHash": "0xbbe108730d7f94a837820e72209c42d35236f9dcafd827218a12aabe10153b34",
+      "creditcoinGasUsed": "392518",
+      "cachedProof": true
+    },
+    "approval": {
+      "kind": "approval",
+      "txHash": "0xd31d96c805cd9eb500e3d434d2566cc4c1aba0402dce020e68003e23ebbfeaac",
+      "sourceChainKey": 1,
+      "sourceBlock": 11679086,
+      "sourceTxIndex": 78,
+      "logIndex": 0,
+      "sourceEmitter": "0x6031c4818E94beC3D909188312F8dB0001db6d1d",
+      "sourceTopic0": "0xdd07ab43bccd3838df7f56549326c77486bddf7f44df88f36891a26ce9b46fa9",
+      "receiptStatus": 1,
+      "proofBytes": 2272,
+      "merkleSiblingCount": 7,
+      "creditcoinTxHash": "0x30b61e8ee7e80e35c092674972575dc28707233e27717a5456c1a63ddc3cc5cc",
+      "creditcoinGasUsed": "389998",
+      "cachedProof": true
+    },
+    "status": {
+      "kind": "status",
+      "txHash": "0x32a7450775f33be76fada63fb9a3b639ca357fd8b8cf65a221394f3cc25fc581",
+      "sourceChainKey": 1,
+      "sourceBlock": 11679087,
+      "sourceTxIndex": 131,
+      "logIndex": 0,
+      "sourceEmitter": "0xC2fFBDFF6f4C29Dc3D506534ffcc91B67f5618D0",
+      "sourceTopic0": "0x683b23e8cb64092e7aa42c46ca0f70c92f3fffa53f0f78a85339a5ee5af10b9f",
+      "receiptStatus": 1,
+      "proofBytes": 1888,
+      "merkleSiblingCount": 8,
+      "creditcoinTxHash": "0x1aaf017bcc69a8794703a09ca17b70b8c3ec3467fa4d79a48528f87652c77bfe",
+      "creditcoinGasUsed": "377230",
+      "cachedProof": true
+    },
+    "revocation": {
+      "kind": "revocation",
+      "txHash": "0x3231c60436ee086643f41a5e853a1b32edbe88f30405a4fb910cd0590876a167",
+      "sourceChainKey": 1,
+      "sourceBlock": 11679139,
+      "sourceTxIndex": 75,
+      "logIndex": 0,
+      "sourceEmitter": "0xC2fFBDFF6f4C29Dc3D506534ffcc91B67f5618D0",
+      "sourceTopic0": "0xc3c8992a61b3d0d2bd05a0068bfa4554d89c6d2196aafadf297de401e621abd8",
+      "receiptStatus": 1,
+      "proofBytes": 1824,
+      "merkleSiblingCount": 7,
+      "creditcoinTxHash": "0x13b2cc9dfd0b5f013016f296f50ec781060d406edcafacdd9ae4ec74873bfe24",
+      "creditcoinGasUsed": "374542",
+      "cachedProof": true
+    }
+  },
+  "live": {
+    "capabilityId": "0xdd3f8e3f3eeb713e5e103da58825b6464c5392d558f81ee378d143aa7158dd9c",
+    "issueTx": "0xff372aa96df54e202644b3294f63ae7071be96b844b20addcffa17561f8f4814",
+    "allowedActionTx": "0xcaa17e9c1c9648f2bfccaacbe71e4c55fd1869129aa68bf4cea67f7221da416f",
+    "depositActionTx": "0x2fdbde8adeb856b911d9e9d3c44dfff4d3605a2af0b7493bb0aedb505d9f37e8",
+    "blockedAction": {
+      "actionNonce": 2,
+      "deadline": "1789095684",
+      "idempotencyKey": "0xa80df893faa207c31c1eecaa7ea4aa11cc18cd4a8b4f88851d0699c1656597ae",
+      "data": "0xa9059cbb0000000000000000000000004c3f5a84041e562928394d63b3e339be70dbcc17000000000000000000000000000000000000000000000000002386f26fc10000",
+      "signature": "0xfca20b6c6029df77b91ebb9d5309b0e8479c6b07b5474bea2765aa4aaa542dbf232c2d7cfbc2d8feb6b80abd1491b904e6ef3ebfa55595853cb0bbb16600055c1b"
+    }
+  }
+}
+
