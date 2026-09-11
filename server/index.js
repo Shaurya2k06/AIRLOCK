@@ -56,7 +56,9 @@ function short(value) {
 
 function timestamp(value) {
   const seconds = Number(value)
-  return Number.isFinite(seconds) && seconds > 0 ? new Date(seconds * 1000).toISOString() : '—'
+  if (!Number.isSafeInteger(seconds) || seconds <= 0) return '—'
+  const date = new Date(seconds * 1000)
+  return Number.isNaN(date.getTime()) ? '—' : date.toISOString()
 }
 
 async function readDeployment() {
@@ -227,4 +229,4 @@ const server = http.createServer(async (request, response) => {
 
 if (require.main === module) server.listen(port, host, () => console.log(`AIRLOCK API listening on http://${host}:${port}`))
 
-module.exports = { server, simulate, state: fixtureState, overview }
+module.exports = { server, simulate, state: fixtureState, overview, timestamp }
