@@ -9,6 +9,138 @@ Sepolia evidence → Attestcoin proof → deterministic capability
 → EIP-712 tool intent → validator → vault execution → revocation
 ```
 
+## AIRLOCK whitepaper
+
+### Abstract
+
+AIRLOCK makes autonomous-agent authority release-specific. A wallet address,
+API key, or worker signature is not enough: the agent must be running under a
+release that has a canonical artifact identity, passed the required evaluation,
+received deployment approval, and remains active. Only then can AIRLOCK issue a
+short-lived, bounded capability for the runtime key.
+
+The design goal is simple:
+
+```text
+authority = artifact ∧ evaluation ∧ approval ∧ active status
+          ∧ policy ∧ capability ∧ valid intent
+```
+
+### The problem
+
+Agent systems change in many places at once: model weights, adapters,
+tokenizers, prompts, tools, containers, dependencies, policies, and source
+revisions. Traditional authorization normally identifies the caller, not the
+exact release that earned authority. A compromised or outdated process can
+therefore retain access even after the intended release has changed or been
+revoked.
+
+AIRLOCK treats release identity as a security boundary. It does not attempt to
+judge whether a model is intelligent or whether an evaluator is correct. It
+enforces the narrower claim that a specific, approved release is the only
+release eligible for a specified capability.
+
+### Release identity and evidence
+
+A manifest commits to the release inputs, including model artifacts, adapters,
+tokenizer, system and developer prompts, tool definitions, container image,
+dependency lockfile, SBOM, build provenance, source revision, and evaluation
+suite. The manifest produces one deterministic `releaseDigest`; changing one
+byte produces a different release.
+
+Four independent evidence classes must converge on the same organization,
+agent, release, policy, nonce, and validity window:
+
+1. Artifact publication identifies the exact release.
+2. Evaluation certification records the required result and evaluator.
+3. Deployment approval authorizes the release and its parameters.
+4. Active status records activation, pause, or revocation.
+
+The resulting evidence root is consumed by the capability registry. Missing,
+stale, mismatched, or revoked evidence fails closed.
+
+### Cross-chain verification
+
+The supported testnet path is Ethereum Sepolia → Attestcoin → Creditcoin CC3.
+Source-chain events are proven through Attestcoin. On Creditcoin, AIRLOCK
+checks receipt status, the approved emitter, topic, log index, event schema,
+decoded fields, and continuity before importing the semantic evidence.
+
+```text
+Ethereum source event
+        ↓
+Attestcoin inclusion and continuity proof
+        ↓
+Creditcoin receipt and semantic verification
+        ↓
+AIRLOCK evidence registry
+        ↓
+deterministic capability decision
+```
+
+The proof worker supplies liveness by discovering events and retrying proof
+submission. It cannot create evidence, approve a release, or issue authority.
+The contracts verify the facts that matter; no centralized bridge signature is
+used as the authorization decision.
+
+### Capability and execution boundary
+
+Once the evidence conjunction succeeds, AIRLOCK issues an audience-bound
+`AIRLOCK_CREDENTIAL_V1` capability. The credential binds a runtime key to the
+release digest, policy hash, scope root, evidence root, spend limit, call limit,
+and expiry. Delegated credentials can narrow authority but cannot widen the
+parent capability. Capabilities are non-transferable, short-lived, and
+revalidated for every action.
+
+The runtime path is deliberately typed:
+
+```text
+LLM proposes intent
+        ↓
+typed EIP-712 intent
+        ↓
+scope, policy, nonce, and budget checks
+        ↓
+exact calldata validation
+        ↓
+AgentVault execution through the router
+```
+
+The model does not hold the vault key. Raw transaction forwarding, arbitrary
+targets, replayed nonces, expired capabilities, and over-budget actions are
+rejected. The vault is callable only through the validated router.
+
+### Protocol surfaces
+
+AIRLOCK exposes the same release-bound authority to agent protocols:
+
+- The MCP gateway filters `tools/list`, revalidates `tools/call`, and returns
+  `ALLOW`, `AUTH_REQUIRED`, or `DENY` based on current capability state.
+- The A2A surface publishes an agent card and represents missing authority as
+  an authentication-required task state rather than silently executing.
+- ERC-8004 and x402 are adapters with explicit configuration gates; they do
+  not change AIRLOCK's evidence or enforcement model.
+- Runtime assurance is layered. Base mode binds a digest to a runtime key; an
+  optional TEE-required mode adds verifier-attested measurement and artifact
+  binding. Base mode does not prove which weights a running process loaded.
+
+### Revocation and security properties
+
+Revocation is monotonic. A proven source-chain revocation is imported into
+Creditcoin and makes the capability unusable; a local guardian pause can stop
+execution while cross-chain evidence is pending. Short TTLs, freshness windows,
+watchers, and emergency controls reduce the delay inherent in cross-chain
+updates.
+
+The security boundary includes receipt-status validation, exact digest matching,
+approved emitters and roles, replay protection, scope intersection, runtime-key
+binding, budget accounting, calldata validation, direct-vault protection, and
+least-privilege proof workers. AIRLOCK does not guarantee model correctness,
+evaluator competence, bias-free behavior, or truth of arbitrary off-chain
+claims. It also makes no zero-knowledge claim about model execution.
+
+The implementation and threat boundaries are documented in [`docs/architecture.md`](docs/architecture.md), [`docs/protocol.md`](docs/protocol.md), and [`docs/threat-model.md`](docs/threat-model.md). Live testnet evidence is recorded in [`docs/evidence.md`](docs/evidence.md).
+
 ## Local verification
 
 ```sh
@@ -99,7 +231,8 @@ not configuration inputs.
 
 The base-mode claim is deliberately narrow: the capability binds a release
 digest to a runtime key; it does not prove that a running process loaded those
-weights. That requires the optional TEE binding described in `context.md`.
+weights. That requires the optional TEE binding described in
+[`docs/architecture.md`](docs/architecture.md).
 
 The protocol extension details and honest integration boundaries are documented
 in [`docs/protocol.md`](docs/protocol.md).
