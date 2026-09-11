@@ -160,6 +160,37 @@ function DemoPage({ onHome }: { onHome: () => void }) {
     }
   }
 
+  const callMcp = async () => {
+    if (!credentialToken) {
+      setProtocolMessage('issue an AIRLOCK credential first')
+      return
+    }
+    const recipient = displayOverview?.policy.recipient
+    if (!recipient) {
+      setProtocolMessage('live policy unavailable; no MCP call was submitted')
+      return
+    }
+    try {
+      const response = await fetch(`${API_URL}/mcp`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: credentialToken },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 'web-payment',
+          method: 'tools/call',
+          params: { name: 'vendor.pay', arguments: { recipient, amount: '0.001' } },
+        }),
+      })
+      const value = await response.json() as { result?: { structuredContent?: { decision?: string; reason?: string; message?: string } }; error?: string }
+      if (!response.ok || value.error) throw new Error(value.error || 'MCP request failed')
+      const decision = value.result?.structuredContent?.decision || 'UNKNOWN'
+      const reason = value.result?.structuredContent?.reason || 'live MCP response received'
+      setProtocolMessage(`MCP ${decision}: ${reason}`)
+    } catch (error) {
+      setProtocolMessage(error instanceof Error ? error.message : 'MCP request failed')
+    }
+  }
+
   const liveData = overview?.dataSource === 'creditcoin-chain'
   const chainUnavailable = loadError || overview?.dataSource === 'rpc-error'
   const displayOverview = liveData && !chainUnavailable ? overview : null
@@ -317,13 +348,13 @@ function DemoPage({ onHome }: { onHome: () => void }) {
             <div className="panel activity-panel"><div className="panel-header"><div><div className="panel-kicker">RECENT ACTIVITY</div><h2>Enforcement log</h2></div><button className="text-button" onClick={() => setActiveNav('Action log')}>View all <Icon name="arrow" size={14} /></button></div><div className="activity-table"><div className="table-head"><span>Action</span><span>Value</span><span>Result</span></div>{displayActivity.map((row) => <div className="table-row" key={`${row.action}-${row.age}`}><div><strong>{row.action}</strong><small>{row.target} · {row.age}</small></div><span>{row.amount}</span><b className={row.state === 'Allowed' ? 'allowed' : 'blocked'}><span />{row.state}</b></div>)}</div></div></section>
         </div>}
 
-        {activeNav !== 'Overview' && <DetailView activeNav={activeNav} onBack={() => setActiveNav('Overview')} evidenceItems={displayEvidence} capability={displayCapability} activity={displayActivity} unavailable={!displayOverview} runbook={runbook} runbookRunning={runbookRunning} runbookMessage={runbookMessage} onRunbookStep={executeRunbook} protocol={protocol} credentialToken={credentialToken} protocolMessage={protocolMessage} onIssueCredential={issueCredential} />}
+        {activeNav !== 'Overview' && <DetailView activeNav={activeNav} onBack={() => setActiveNav('Overview')} evidenceItems={displayEvidence} capability={displayCapability} activity={displayActivity} unavailable={!displayOverview} runbook={runbook} runbookRunning={runbookRunning} runbookMessage={runbookMessage} onRunbookStep={executeRunbook} protocol={protocol} credentialToken={credentialToken} protocolMessage={protocolMessage} onIssueCredential={issueCredential} onCallMcp={callMcp} />}
       </main>
     </div>
   )
 }
 
-function DetailView({ activeNav, onBack, evidenceItems, capability, activity: displayActivity, unavailable, runbook, runbookRunning, runbookMessage, onRunbookStep, protocol, credentialToken, protocolMessage, onIssueCredential }: { activeNav: string; onBack: () => void; evidenceItems: DisplayEvidence[]; capability?: Overview['capability']; activity: Array<{ action: string; target: string; amount: number | string; state: string; age: string }>; unavailable: boolean; runbook: Runbook | null; runbookRunning: string; runbookMessage: string; onRunbookStep: (step: RunbookStep) => void; protocol: Protocol | null; credentialToken: string; protocolMessage: string; onIssueCredential: () => void }) {
+function DetailView({ activeNav, onBack, evidenceItems, capability, activity: displayActivity, unavailable, runbook, runbookRunning, runbookMessage, onRunbookStep, protocol, credentialToken, protocolMessage, onIssueCredential, onCallMcp }: { activeNav: string; onBack: () => void; evidenceItems: DisplayEvidence[]; capability?: Overview['capability']; activity: Array<{ action: string; target: string; amount: number | string; state: string; age: string }>; unavailable: boolean; runbook: Runbook | null; runbookRunning: string; runbookMessage: string; onRunbookStep: (step: RunbookStep) => void; protocol: Protocol | null; credentialToken: string; protocolMessage: string; onIssueCredential: () => void; onCallMcp: () => void }) {
   const titles: Record<string, string> = { 'Evidence graph': 'Evidence inspector', Capabilities: 'Capability registry', 'Action log': 'Action log', Runbook: 'Terminal runbook', Protocol: 'Agent protocol' }
   return <div className="detail-page"><div className="page-heading"><div><div className="eyebrow"><span className="eyebrow-line" /> AIRLOCK / INSPECTOR</div><h1>{titles[activeNav]}</h1><p>Verified state from the current release firewall.</p></div><button className="secondary-button" onClick={onBack}><Icon name="arrow" size={15} /> Back to overview</button></div>
     {activeNav === 'Evidence graph' && (evidenceItems.length ? <div className="detail-grid">{evidenceItems.map((item) => <div className="panel detail-card" key={item.label}><div className="detail-card-top"><div className="evidence-node"><Icon name={item.icon} size={18} /><span className="node-check"><Icon name="check" size={10} /></span></div><span className="verified-badge"><Icon name="check" size={12} /> {item.status}</span></div><h2>{item.label}</h2><p>{item.detail}</p><code>{item.txHash ? `${item.txHash.slice(0, 10)}…${item.txHash.slice(-8)} · log ${item.logIndex ?? '—'}` : item.time ?? 'chain data'}</code><div className="detail-meta"><span>{item.sourceChainKey ? `chain key ${item.sourceChainKey}` : 'Ethereum Sepolia'} · block {item.sourceBlock ?? '—'}</span><span>{item.receiptStatus === 1 ? 'receipt status 1' : item.status === 'PROVEN' ? 'receipt metadata pending' : 'not verified'}</span></div>{item.sourceEmitter && <small>Emitter: {item.sourceEmitter.slice(0, 10)}…{item.sourceEmitter.slice(-8)} · event: {item.label}</small>}{item.creditcoinTxHash && <small>Creditcoin import: {item.creditcoinTxHash.slice(0, 10)}…{item.creditcoinTxHash.slice(-8)}</small>}</div>)}</div> : <div className="panel runbook-empty">No evidence is available from Creditcoin.</div>)}
@@ -334,7 +365,7 @@ function DetailView({ activeNav, onBack, evidenceItems, capability, activity: di
       <div className="protocol-grid">
         <div className="panel protocol-card"><div className="panel-kicker">MCP ENFORCEMENT GATEWAY</div><h2>{protocol?.mcp.endpoint ?? 'unavailable'}</h2><p>Tool discovery and every call are filtered against the current credential, release status, scope, and budget.</p><div className="protocol-lines"><span>protocol</span><strong>{protocol?.mcp.protocolVersion ?? '—'}</strong><span>tools</span><strong>{protocol?.mcp.tools.join(' · ') ?? '—'}</strong></div></div>
         <div className="panel protocol-card"><div className="panel-kicker">A2A AUTHORIZATION</div><h2>{protocol?.a2a.endpoint ?? 'unavailable'}</h2><p>Tasks return ALLOW, AUTH_REQUIRED, or DENY with a credential bound to one agent release.</p><a className="text-button" href={protocol?.a2a.agentCard} target="_blank" rel="noreferrer">Open agent card <Icon name="external" size={14} /></a></div>
-        <div className="panel protocol-card"><div className="panel-kicker">AIRLOCK CREDENTIAL</div><h2>{protocol?.credential.schema ?? 'unavailable'}</h2><p>EIP-712 signed, audience-bound, ERC-1271 compatible, short-lived, and attenuable.</p><div className="protocol-lines"><span>audience</span><code>{protocol?.credential.audience ?? '—'}</code><span>identity</span><strong>{protocol?.identity.configured ? 'ERC-8004 configured' : 'ERC-8004 adapter unconfigured'}</strong></div><button className="primary-button" onClick={onIssueCredential} disabled={!protocol || !runbook?.writesEnabled || Boolean(credentialToken)}>Issue credential</button>{protocolMessage && <small className="protocol-message">{protocolMessage}</small>}{credentialToken && <textarea className="credential-token" readOnly value={credentialToken} aria-label="AIRLOCK credential authorization header" />}</div>
+        <div className="panel protocol-card"><div className="panel-kicker">AIRLOCK CREDENTIAL</div><h2>{protocol?.credential.schema ?? 'unavailable'}</h2><p>EIP-712 signed, audience-bound, ERC-1271 compatible, short-lived, and attenuable.</p><div className="protocol-lines"><span>audience</span><code>{protocol?.credential.audience ?? '—'}</code><span>identity</span><strong>{protocol?.identity.configured ? 'ERC-8004 configured' : 'ERC-8004 adapter unconfigured'}</strong></div><div className="protocol-actions"><button className="primary-button" onClick={onIssueCredential} disabled={!protocol || !runbook?.writesEnabled || Boolean(credentialToken)}>Issue credential</button><button className="secondary-button" onClick={onCallMcp} disabled={!credentialToken}>Run MCP payment</button></div>{protocolMessage && <small className="protocol-message">{protocolMessage}</small>}{credentialToken && <textarea className="credential-token" readOnly value={credentialToken} aria-label="AIRLOCK credential authorization header" />}</div>
         <div className="panel protocol-card"><div className="panel-kicker">RELEASE PASSPORT</div><h2>{protocol?.runtimeAssurance.level ?? '—'} · {protocol?.runtimeAssurance.name ?? 'unavailable'}</h2><p>{protocol?.runtimeAssurance.note ?? 'Passport state is read from the current deployment.'}</p><div className="protocol-lines"><span>manifest</span><code>{protocol?.releasePassport.manifest ?? '—'}</code><span>artifact root</span><code>{protocol?.releasePassport.artifactRoot ?? '—'}</code><span>verified</span><strong>{protocol?.runtimeAssurance.verified ? 'yes' : 'configured only'}</strong></div></div>
       </div>
     </div>}
@@ -358,7 +389,7 @@ function LandingPage({ onEnterDemo }: { onEnterDemo: () => void }) {
 
   const liveRelease = landingOverview?.dataSource === 'creditcoin-chain' ? landingOverview.release : null
   const liveCapability = landingOverview?.dataSource === 'creditcoin-chain' ? landingOverview.capability : null
-  const liveDigest = liveRelease?.digest ?? 'connect the live demo to inspect a releaseDigest'
+  const liveDigest = liveRelease?.digest ?? 'release digest unavailable'
   const liveEvidence = new Map((landingOverview?.evidence ?? []).map((item) => [item.kind, item.status]))
 
   return <div className="product-landing">

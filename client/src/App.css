@@ -593,6 +593,7 @@ code { color: var(--olive-char); font: 400 11px/17px var(--mono); }
 .protocol-lines span { color: var(--sage); font: 400 11px/17px var(--mono); }
 .protocol-lines strong, .protocol-lines code { min-width: 0; overflow-wrap: anywhere; color: var(--ink); font: 400 11px/17px var(--mono); }
 .protocol-message { color: var(--lichen); font: 400 11px/17px var(--mono); }
+.protocol-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .credential-token { width: 100%; min-height: 110px; resize: vertical; padding: 10px; border: 1px solid var(--ash); border-radius: 3px; background: var(--vellum); color: var(--ink); font: 400 10px/1.4 var(--mono); }
 .detail-card code { border-color: var(--ash); }
 .detail-meta { color: var(--lichen); font: 400 9px/17px var(--mono); }
