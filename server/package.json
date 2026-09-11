@@ -4,6 +4,7 @@
   "description": "AIRLOCK local control-plane API",
   "main": "index.js",
   "scripts": {
+    "postinstall": "npm --prefix ../contracts ci",
     "start": "node --env-file-if-exists=.env index.js",
     "test": "node --test"
   },
