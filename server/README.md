@@ -6,8 +6,9 @@ and capability state from Creditcoin and returns `dataSource: creditcoin-chain`.
 RPC failures are returned as `dataSource: rpc-error`; the client must not treat
 that state as a fixture or authorization decision.
 
-The server needs no private key. Set `CREDITCOIN_RPC_URL`; `AIRLOCK_DEPLOYMENTS`
-is optional and defaults to `../deployments.json`.
+The server needs no private key. Copy `.env.example` to `.env` and set
+`CREDITCOIN_RPC_URL`; `AIRLOCK_DEPLOYMENTS` is optional and defaults to
+`../deployments.json`.
 
 ```sh
 npm test

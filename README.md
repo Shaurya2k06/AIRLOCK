@@ -50,6 +50,9 @@ clean-clone live rehearsal is recorded in [`docs/rehearsal.md`](docs/rehearsal.m
 The generated evidence walkthrough is [`docs/demo-video.mp4`](docs/demo-video.mp4);
 the recording script is [`docs/demo-video-script.md`](docs/demo-video-script.md).
 
+For local wiring, copy `server/.env.example` to `server/.env` and
+`client/.env.example` to `client/.env` when using a non-default API URL.
+
 ## Live run inputs
 
 Copy `contracts/.env.example` to `contracts/.env` only when running the real

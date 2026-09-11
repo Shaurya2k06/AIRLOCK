@@ -10,7 +10,8 @@ npm run build
 npm run lint
 ```
 
-Set `VITE_API_URL` when the API is not at `http://127.0.0.1:8787`. The client
+Copy `.env.example` to `.env` only when the API is not at the default
+`http://127.0.0.1:8787`, then set `VITE_API_URL`. The client
 has no wallet, RPC, or private-key configuration. The server exposes write
 runbook actions only when `AIRLOCK_ENABLE_WRITES=true` is set in its own
 environment.
