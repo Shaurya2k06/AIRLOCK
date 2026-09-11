@@ -616,6 +616,15 @@ code { color: var(--olive-char); font: 400 11px/17px var(--mono); }
 .runbook-copy strong { color: #000; font: 500 12px/17px var(--mono); }
 .runbook-copy span { color: var(--lichen); font: 400 9px/17px var(--mono); }
 .runbook-empty { color: var(--lichen); background: var(--paper); }
+.live-protocol-section { padding-bottom: 80px; }
+.live-protocol-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 40px; }
+.live-protocol-card { display: flex; min-height: 178px; flex-direction: column; gap: 12px; padding: 22px; border: 1px solid var(--ash); border-radius: 8px; background: var(--paper); }
+.live-protocol-card span { color: var(--lichen); font: 500 11px/17px var(--mono); letter-spacing: -.067em; }
+.live-protocol-card strong { color: var(--olive-char); font: 400 26px/1 var(--serif); letter-spacing: -.05em; }
+.live-protocol-card code { margin-top: auto; overflow-wrap: anywhere; color: var(--ink); font: 400 11px/1.45 var(--mono); }
+.live-protocol-card small { color: var(--lichen); font: 400 11px/1.45 var(--mono); letter-spacing: -.067em; }
+.live-protocol-footer { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--ash); color: var(--lichen); font: 400 11px/17px var(--mono); }
+.live-protocol-footer .section-link { padding: 0; border: 0; background: transparent; cursor: pointer; }
 
 @media (max-width: 1120px) {
   .product-hero h1 { font-size: clamp(58px, 8vw, 82px); }

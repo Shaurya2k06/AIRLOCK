@@ -73,6 +73,7 @@ type Protocol = {
 
 type ReleasePassport = {
   verified: boolean
+  releaseVersion: number
   releaseDigest: string
   manifestHash: string
   artifactRoot: string
@@ -372,9 +373,26 @@ function DetailView({ activeNav, onBack, evidenceItems, capability, activity: di
   </div>
 }
 
+function LiveProtocolSurface({ overview, passport, protocol, onEnterDemo }: { overview: Overview | null; passport: ReleasePassport | null; protocol: Protocol | null; onEnterDemo: () => void }) {
+  const proven = overview?.evidence.filter((item) => item.status === 'PROVEN').length ?? 0
+  const release = overview?.release
+  const capability = overview?.capability
+  const capabilityRemaining = capability ? `${Math.max(0, capability.callCap - capability.callsUsed)} calls · ${Math.max(0, capability.spendCap - capability.spent).toFixed(3)} native` : 'unavailable'
+  return <section className="product-section product-container live-protocol-section" id="live-protocol">
+    <div className="section-intro section-intro-wide"><p className="product-kicker">LIVE PROTOCOL SURFACE</p><h2>The authority path is inspectable from release to action.</h2><p>This page reads the deployed Creditcoin state. The demo exposes the same control plane for issuing credentials, discovering authorized MCP tools, and running bounded actions.</p></div>
+    <div className="live-protocol-grid">
+      <div className="live-protocol-card"><span>RELEASE PASSPORT</span><strong>{passport?.verified ? 'VERIFIED' : 'UNAVAILABLE'}</strong><code>{passport?.releaseDigest ?? '—'}</code><small>{passport ? `v${passport.releaseVersion} · ${passport.fileCount} manifest files` : 'No verified passport loaded'}</small></div>
+      <div className="live-protocol-card"><span>EVIDENCE / CAPABILITY</span><strong>{release?.status ?? 'UNAVAILABLE'}</strong><code>{`${proven} / 4 proofs · ${capability?.status ?? 'no capability'}`}</code><small>{capabilityRemaining}</small></div>
+      <div className="live-protocol-card"><span>AGENT INTEROPERABILITY</span><strong>{protocol ? 'CONNECTED' : 'UNAVAILABLE'}</strong><code>{protocol ? `${protocol.mcp.tools.length} MCP tools · A2A` : '—'}</code><small>{protocol ? `${protocol.credential.schema} · ${protocol.runtimeAssurance.level} ${protocol.runtimeAssurance.name}` : 'Protocol metadata unavailable'}</small></div>
+    </div>
+    <div className="live-protocol-footer"><span>{protocol ? `${protocol.mcp.protocolVersion} · EIP-712 credential · ${protocol.identity.configured ? 'ERC-8004 identity configured' : 'ERC-8004 adapter available'}` : 'Connect the control plane to inspect live protocol state'}</span><button className="section-link" onClick={onEnterDemo}>Open live controls <Icon name="arrow" size={14} /></button></div>
+  </section>
+}
+
 function LandingPage({ onEnterDemo }: { onEnterDemo: () => void }) {
   const [landingOverview, setLandingOverview] = useState<Overview | null>(null)
   const [landingPassport, setLandingPassport] = useState<ReleasePassport | null>(null)
+  const [landingProtocol, setLandingProtocol] = useState<Protocol | null>(null)
 
   useEffect(() => {
     fetch(`${API_URL}/api/overview`)
@@ -385,6 +403,10 @@ function LandingPage({ onEnterDemo }: { onEnterDemo: () => void }) {
       .then((response) => response.ok ? response.json() as Promise<ReleasePassport> : Promise.reject(new Error('passport unavailable')))
       .then(setLandingPassport)
       .catch(() => setLandingPassport(null))
+    fetch(`${API_URL}/api/protocol`)
+      .then((response) => response.ok ? response.json() as Promise<Protocol> : Promise.reject(new Error('protocol unavailable')))
+      .then(setLandingProtocol)
+      .catch(() => setLandingProtocol(null))
   }, [])
 
   const liveRelease = landingOverview?.dataSource === 'creditcoin-chain' ? landingOverview.release : null
@@ -442,6 +464,7 @@ function LandingPage({ onEnterDemo }: { onEnterDemo: () => void }) {
       <section className="product-section product-container operations-section"><div className="section-intro"><p className="product-kicker">RELIABILITY AND OPERATIONS</p><h2>Proof infrastructure stays replaceable. The decision stays verifiable.</h2><p>Cursor-based discovery, retries, monitoring, freshness alerts, deployment checks, and guardian controls keep the system operating without making a worker the source of truth.</p></div><div className="operations-grid"><div><span>liveness</span><strong>Proof-worker retries</strong><p>Workers discover events, retry failed submissions, and expose their cursor.</p></div><div><span>availability</span><strong>Permissionless submission</strong><p>Anyone with a valid proof can submit it; the worker is not a privileged oracle.</p></div><div><span>containment</span><strong>Guardian emergency controls</strong><p>Local pauses narrow the cross-chain freshness window during an incident.</p></div><div><span>auditability</span><strong>Deployment verification</strong><p>Release, evidence, capability, and enforcement activity remain inspectable.</p></div></div></section>
 
       <section className="product-section product-container faq-section"><div className="section-intro section-intro-wide"><p className="product-kicker">FAQ</p><h2>Direct answers for security and platform teams.</h2></div><div className="faq-list"><details><summary>Is AIRLOCK a bridge?</summary><p>No. Attestcoin proofs carry source-chain facts to Creditcoin for verification. AIRLOCK uses the verified result to decide whether authority exists.</p></details><details><summary>What exactly does Attestcoin prove?</summary><p>Transaction inclusion and continuity, which AIRLOCK combines with receipt status, approved emitter, topic, log index, schema, and decoded-field checks.</p></details><details><summary>Can an agent bypass the router?</summary><p>The model does not hold the vault key, raw transaction forwarding is rejected, and the AgentVault is callable only through the router.</p></details><details><summary>Can a capability be transferred?</summary><p>No. Capabilities are bound to a runtime key, a release digest, an explicit scope, budgets, and an expiry window.</p></details><details><summary>What happens when a release is revoked?</summary><p>After the revocation is proven and imported, future AIRLOCK actions fail even if the old runtime continues to sign.</p></details><details><summary>How long does cross-chain verification take?</summary><p>It depends on source finality, proof generation, submission, and polling. Freshness limits and short capability TTLs prevent stale authority from lasting indefinitely.</p></details><details><summary>Does AIRLOCK prove that the model is intelligent?</summary><p>No. AIRLOCK controls release authority and execution boundaries. Evaluation quality and model behavior remain responsibilities of the organization.</p></details><details><summary>Can organizations self-host the proof worker?</summary><p>Yes. The worker is designed as a replaceable liveness component; the verifier and on-chain contracts remain the authority boundary.</p></details></div></section>
+      <LiveProtocolSurface overview={landingOverview} passport={landingPassport} protocol={landingProtocol} onEnterDemo={onEnterDemo} />
     </main>
 
     <footer className="product-footer product-container" id="access"><div><p className="product-kicker">READY WHEN YOUR AGENT TOUCHES REAL VALUE</p><h2>Protect the next release your agent ships.</h2><p>Run AIRLOCK in your own environment, inspect the architecture, or start with the live proof surface.</p></div><div className="product-footer-actions"><a className="product-button product-button-primary" href="#policy">Protect a release <Icon name="arrow" size={15} /></a><a className="product-button product-button-secondary" href="https://github.com/Shaurya2k06/AIRLOCK/blob/main/docs/architecture.md" target="_blank" rel="noreferrer">Read the architecture <Icon name="external" size={14} /></a><button className="product-button product-button-ghost" onClick={onEnterDemo}>Explore the demo <Icon name="arrow" size={14} /></button></div></footer>
