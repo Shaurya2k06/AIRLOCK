@@ -3,7 +3,8 @@
 This is the non-secret evidence snapshot from the live run completed on
 2026-09-11. The exact public deployment record is in
 [`deployment-manifest.json`](deployment-manifest.json). Private keys and RPC
-credentials are intentionally excluded.
+credentials are intentionally excluded. The independent clean-clone replay is
+summarized in [`rehearsal.md`](rehearsal.md).
 
 ## Networks
 

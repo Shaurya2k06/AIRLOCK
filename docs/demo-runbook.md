@@ -52,3 +52,6 @@ never accepts a caller-supplied target, selector, or raw calldata.
 
 Never describe fixture proof transactions as live evidence. Record timing,
 proof size, gas, and rejection reason in the final evidence page.
+
+The primary live evidence is in `evidence.md`; the second clean-clone replay is
+in `rehearsal.md`.

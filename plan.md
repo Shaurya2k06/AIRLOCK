@@ -1,5 +1,16 @@
 # AIRLOCK — Implementation Plan
 
+## Current delivery status — 2026-09-11
+
+Completed: the live Sepolia → Attestcoin → Creditcoin vertical slice, source
+and destination contract verification, a non-secret deployment evidence
+package, the read-only dashboard, and a second full rehearsal from a clean
+clone of the submission commit. Local CI and the pushed GitHub CI run are green.
+
+Still external to this workspace: publishing the repository publicly and
+uploading a public demo video. Do not claim either as complete until the final
+links are added to the submission package.
+
 ## 1. Delivery objective
 
 Build a working AIRLOCK MVP in which real Ethereum Sepolia release events are proven through Attestcoin and consumed by Creditcoin CC3 testnet contracts to issue, enforce, and revoke an AI-agent capability.

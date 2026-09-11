@@ -43,7 +43,8 @@ The read-only dashboard uses only `CREDITCOIN_RPC_URL` and the generated
 `deployments.json`; the Vite client optionally uses `VITE_API_URL` (default
 `http://127.0.0.1:8787`). Public live addresses, receipts, proof metrics, and
 enforcement results are recorded in [`docs/evidence.md`](docs/evidence.md) and
-[`docs/deployment-manifest.json`](docs/deployment-manifest.json).
+[`docs/deployment-manifest.json`](docs/deployment-manifest.json). A second
+clean-clone live rehearsal is recorded in [`docs/rehearsal.md`](docs/rehearsal.md).
 
 ## Live run inputs
 
@@ -70,7 +71,7 @@ not configuration inputs.
 - `server/index.js` — fixture/live read-only control-plane API.
 - `client/src/App.tsx` — evidence, capability, and enforcement console.
 - `docs/` — architecture, Attestcoin integration, threat model, live evidence,
-  deployment manifest, and demo runbook.
+  deployment manifest, rehearsal evidence, and demo runbook.
 
 The base-mode claim is deliberately narrow: the capability binds a release
 digest to a runtime key; it does not prove that a running process loaded those
