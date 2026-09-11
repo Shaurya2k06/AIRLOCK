@@ -18,7 +18,7 @@
       "artifactTx": "0xfafaf01f51784f2c18f966bd9eff849d5e358340516e49fdea5370aff67ef62d",
       "evaluationTx": "0x75f00f6cae34f0d125e21ea819ef817f00b3422463e47fc2aa90d671eaeb6ab6",
       "approvalTx": "0x9dcd35a79304791b254417a4fa5bb64417c1cb1e51040c40a786f35344e27028",
-      "statusTx": "0xf314c040f20f9b9e5e22b8812508ce859e05448a7843b6f7ecc7590fcf550c80"
+      "statusTx": "0x32c95955e1df829b291cb9a5b427f038ea7e2c2943e55bfb37c8f21209166d39"
     }
   },
   "creditcoin": {
@@ -170,26 +170,27 @@
     },
     "status": {
       "kind": "status",
-      "txHash": "0xf314c040f20f9b9e5e22b8812508ce859e05448a7843b6f7ecc7590fcf550c80",
+      "txHash": "0x32c95955e1df829b291cb9a5b427f038ea7e2c2943e55bfb37c8f21209166d39",
       "sourceChainKey": 1,
-      "sourceBlock": 11682253,
-      "sourceTxIndex": 112,
+      "sourceBlock": 11683654,
+      "sourceTxIndex": 106,
       "logIndex": 0,
+      "sourceEmitter": "0x74Da99939AFC64808aF49f00307153C401c3dc29",
+      "sourceTopic0": "0x683b23e8cb64092e7aa42c46ca0f70c92f3fffa53f0f78a85339a5ee5af10b9f",
       "receiptStatus": 1,
       "proofBytes": 1888,
       "merkleSiblingCount": 8,
-      "creditcoinTxHash": "0x8a3214ba87d337c685ee5c78bae3ec482e506a714c8aa2a1520cefaac8dde3ae",
-      "creditcoinGasUsed": "1327864",
-      "batchCreditcoinTxHash": "0x8a3214ba87d337c685ee5c78bae3ec482e506a714c8aa2a1520cefaac8dde3ae",
-      "cachedProof": false
+      "creditcoinTxHash": "0x77af98c16fe33cb247160977b0813a2bf4b477a03e020ace839d5c05f596ed58",
+      "creditcoinGasUsed": "371896",
+      "cachedProof": true
     }
   },
   "live": {
-    "capabilityId": "0xb4392ab1c49e97228760b0389b27270aafa1be4ceb320c653648bb26df5e9009",
-    "rootCapabilityId": "0xb4392ab1c49e97228760b0389b27270aafa1be4ceb320c653648bb26df5e9009",
-    "issueTx": "0xa61d8e0ff2f3349e667e43c4c1d6e4ad8b4135818489ee5e0197c82eb78aa475",
+    "capabilityId": "0xdca151dea0044244633decaca89059dafed027f1a49282c5d3e3f59f5d20e3a4",
+    "rootCapabilityId": "0xdca151dea0044244633decaca89059dafed027f1a49282c5d3e3f59f5d20e3a4",
+    "issueTx": "0x7989f5eeb726855a2b354d1ede0b111030bfb293f4b0d3a9dd5eaa2223e9a760",
     "agentId": "0xc9bb4c9317790d917fe2da888cda19c1c96a65a7b8393ec0959bc352361d8c31",
-    "lastCapabilityId": "0xb4392ab1c49e97228760b0389b27270aafa1be4ceb320c653648bb26df5e9009",
+    "lastCapabilityId": "0xdca151dea0044244633decaca89059dafed027f1a49282c5d3e3f59f5d20e3a4",
     "lastAgentId": "0xc9bb4c9317790d917fe2da888cda19c1c96a65a7b8393ec0959bc352361d8c31",
     "lastDelegated": false,
     "delegated": false,
