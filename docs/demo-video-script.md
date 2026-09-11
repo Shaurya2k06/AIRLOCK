@@ -4,6 +4,11 @@ Target length: 90 seconds. Record the live dashboard and browser tabs for the
 Sepolia and Creditcoin transaction links in [`evidence.md`](evidence.md). Do
 not use fixture mode or describe an unverified event as proven.
 
+[`demo-video.mp4`](demo-video.mp4) is a ready-to-host 42-second evidence
+walkthrough generated from the verified deployment manifest. For a stronger
+submission, use the script below to replace it with a screen recording of the
+live dashboard; either version must retain the honest-boundary statement.
+
 1. **0:00–0:10 — Claim.** Show the AIRLOCK overview and say: “AIRLOCK gives an
    agent authority only after one release digest is backed by artifact,
    evaluation, approval, and active-status evidence.”

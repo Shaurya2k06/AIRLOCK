@@ -45,6 +45,8 @@ The read-only dashboard uses only `CREDITCOIN_RPC_URL` and the generated
 enforcement results are recorded in [`docs/evidence.md`](docs/evidence.md) and
 [`docs/deployment-manifest.json`](docs/deployment-manifest.json). A second
 clean-clone live rehearsal is recorded in [`docs/rehearsal.md`](docs/rehearsal.md).
+The generated evidence walkthrough is [`docs/demo-video.mp4`](docs/demo-video.mp4);
+the recording script is [`docs/demo-video-script.md`](docs/demo-video-script.md).
 
 ## Live run inputs
 
