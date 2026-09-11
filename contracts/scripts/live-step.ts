@@ -36,6 +36,10 @@ const intentTypes = {
     ],
 };
 
+function deploymentPath(): string {
+    return resolve(process.cwd(), process.env.AIRLOCK_DEPLOYMENTS?.trim() || "../deployments.json");
+}
+
 function required(name: string): string {
     const value = process.env[name]?.trim();
     if (!value) throw new Error(`Missing ${name}`);
@@ -43,11 +47,11 @@ function required(name: string): string {
 }
 
 async function deployment(): Promise<any> {
-    return JSON.parse(await readFile(resolve(process.cwd(), "../deployments.json"), "utf8"));
+    return JSON.parse(await readFile(deploymentPath(), "utf8"));
 }
 
 async function save(value: any) {
-    await writeFile(resolve(process.cwd(), "../deployments.json"), `${JSON.stringify(value, null, 2)}\n`);
+    await writeFile(deploymentPath(), `${JSON.stringify(value, null, 2)}\n`);
 }
 
 function paymentIntent(data: string, deploymentState: any, capabilityId: string, actionNonce: number) {

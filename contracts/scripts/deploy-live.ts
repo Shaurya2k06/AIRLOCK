@@ -44,6 +44,10 @@ function pair(left: string, right: string): string {
         : keccak256(concat([right, left]));
 }
 
+function deploymentPath(): string {
+    return resolve(process.cwd(), process.env.AIRLOCK_DEPLOYMENTS?.trim() || "../deployments.json");
+}
+
 function scopeLeaf(target: string, functionSelector: string, validator: string, constraintsHash: string): string {
     return keccak256(abi.encode(["address", "bytes4", "address", "bytes32"], [
         target,
@@ -357,7 +361,7 @@ async function main() {
             depositAmount: depositAmount.toString(),
         },
     };
-    await writeFile(resolve(process.cwd(), "../deployments.json"), `${JSON.stringify(deployment, null, 2)}\n`);
+    await writeFile(deploymentPath(), `${JSON.stringify(deployment, null, 2)}\n`);
     console.log(JSON.stringify(deployment, null, 2));
 }
 
