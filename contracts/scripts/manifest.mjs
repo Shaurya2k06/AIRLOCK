@@ -7,6 +7,7 @@ import { AbiCoder, id, keccak256 } from "ethers";
 import { encode } from "cbor2";
 
 const DOMAIN_SEPARATOR = id("AIRLOCK_RELEASE_V1");
+const ZERO_BYTES32 = `0x${"00".repeat(32)}`;
 const abi = AbiCoder.defaultAbiCoder();
 const componentDefaults = {
     weights: "weights.bin",
@@ -16,6 +17,12 @@ const componentDefaults = {
     container: "container.digest",
     sbom: "sbom.json",
     provenance: "provenance.json",
+    agentCard: "agent-card.json",
+    a2aCard: "a2a-card.json",
+    configSchema: "config.schema.json",
+    policyBundle: "policy.json",
+    sigstoreBundle: "sigstore.bundle.json",
+    rekorProof: "rekor-proof.json",
 };
 
 function sha256(value) {
@@ -136,7 +143,41 @@ async function componentHash(input, metadata, name, directName = `${name}Hash`) 
     return sha256(content);
 }
 
+async function optionalComponentHash(input, metadata, name) {
+    try {
+        return await componentHash(input, metadata, name, `${name}Hash`);
+    } catch (error) {
+        if (error.code === "ENOENT") return ZERO_BYTES32;
+        throw error;
+    }
+}
+
+function passportHash(value) {
+    return keccak256(canonicalBytes(value));
+}
+
 function computeReleaseDigest(payload, manifestHash, artifactRoot) {
+    if (!payload.passport) {
+        return keccak256(abi.encode(
+            ["bytes32", "bytes32", "bytes32", "bytes32", "bytes32", "bytes32", "bytes32", "bytes32", "bytes32", "bytes32", "bytes32", "bytes32", "uint64"],
+            [
+                DOMAIN_SEPARATOR,
+                payload.orgId,
+                payload.releaseId,
+                manifestHash,
+                artifactRoot,
+                payload.components.weightsHash,
+                payload.components.tokenizerHash,
+                payload.components.systemPromptHash,
+                payload.components.toolManifestRoot,
+                payload.components.containerImageDigest,
+                payload.components.sbomHash,
+                payload.components.provenanceHash,
+                payload.releaseVersion,
+            ],
+        ));
+    }
+    const passport = payload.passport;
     const values = [
         DOMAIN_SEPARATOR,
         payload.orgId,
@@ -151,9 +192,20 @@ function computeReleaseDigest(payload, manifestHash, artifactRoot) {
         payload.components.sbomHash,
         payload.components.provenanceHash,
         payload.releaseVersion,
+        passport.modelProviderHash,
+        passport.modelIdentifierHash,
+        passport.modelChecksum,
+        passport.promptTemplateHash,
+        passport.agentCardHash,
+        passport.a2aCardHash,
+        passport.configSchemaHash,
+        passport.policyBundleHash,
+        passport.sigstoreBundleHash,
+        passport.rekorProofHash,
+        passport.previousReleaseDigest,
     ];
     return keccak256(abi.encode(
-        ["bytes32", "bytes32", "bytes32", "bytes32", "bytes32", "bytes32", "bytes32", "bytes32", "bytes32", "bytes32", "bytes32", "bytes32", "uint64"],
+        ["bytes32", "bytes32", "bytes32", "bytes32", "bytes32", "bytes32", "bytes32", "bytes32", "bytes32", "bytes32", "bytes32", "bytes32", "uint64", "bytes32", "bytes32", "bytes32", "bytes32", "bytes32", "bytes32", "bytes32", "bytes32", "bytes32", "bytes32", "bytes32"],
         values,
     ));
 }
@@ -185,6 +237,21 @@ async function buildManifest({ input, output, orgId, releaseId, releaseVersion, 
             ...componentOverrides,
         },
     };
+    payload.passport = {
+        modelProviderHash: bytes32(metadata.modelProvider || "AIRLOCK_RUNTIME", "modelProvider"),
+        modelIdentifierHash: bytes32(metadata.modelIdentifier || "release-bound-agent", "modelIdentifier"),
+        modelChecksum: bytes32(metadata.modelChecksum || payload.components.weightsHash, "modelChecksum"),
+        promptTemplateHash: payload.components.systemPromptHash,
+        agentCardHash: await optionalComponentHash(inputPath, metadata, "agentCard"),
+        a2aCardHash: await optionalComponentHash(inputPath, metadata, "a2aCard"),
+        configSchemaHash: await optionalComponentHash(inputPath, metadata, "configSchema"),
+        policyBundleHash: await optionalComponentHash(inputPath, metadata, "policyBundle"),
+        sigstoreBundleHash: await optionalComponentHash(inputPath, metadata, "sigstoreBundle"),
+        rekorProofHash: await optionalComponentHash(inputPath, metadata, "rekorProof"),
+        previousReleaseDigest: bytes32(metadata.previousReleaseDigest || ZERO_BYTES32, "previousReleaseDigest"),
+        runtimeAssurance: metadata.runtimeAssurance || "L0",
+    };
+    payload.passport.passportHash = passportHash(payload.passport);
     if (!Number.isSafeInteger(payload.releaseVersion) || payload.releaseVersion < 1 || payload.releaseVersion > 0xffffffffffffffff) {
         throw new Error("releaseVersion must be a positive uint64");
     }
@@ -223,6 +290,11 @@ function verifyDocument(document) {
     }
     const artifactRoot = merkleRoot(document.payload.files.map((file) => file.leaf));
     if (artifactRoot !== document.artifactRoot) throw new Error("artifact root mismatch");
+    if (document.payload.passport?.passportHash) {
+        const passport = { ...document.payload.passport };
+        delete passport.passportHash;
+        if (passportHash(passport) !== document.payload.passport.passportHash) throw new Error("release passport hash mismatch");
+    }
     const releaseDigest = computeReleaseDigest(document.payload, manifestHash, artifactRoot);
     if (releaseDigest !== document.releaseDigest) throw new Error("release digest mismatch");
     return { manifestHash, artifactRoot, releaseDigest, files: document.payload.files.length };

@@ -35,8 +35,8 @@ test("manifest is canonical, order-independent, and proves a file path", async (
     const output = join(root, "manifest.json");
     try {
         const document = await buildManifest({ input: root, output });
-        assert.equal(document.releaseDigest, '0xf50242c69cb47aeda77910c8c09c6147f2a00ef3cb2aa0c39f0a6eae420fcd97');
-        assert.equal(document.manifestHash, '0x33691a164e51da33af43f3fa48b3e0a571dc3214819a9dba17e0f73437e29164');
+        assert.equal(document.releaseDigest, '0x6bee1b4f4951180cf17449fe0062c483fa5e321e7397f433075ecea88f130bb0');
+        assert.equal(document.manifestHash, '0xccb209ca661a147078db4c4db7db3785e2a746327279fd2ea802ac17d25e69ec');
         assert.equal(document.artifactRoot, '0x156da8b0ef0244a7873b0dca90663820dcb3a976b500c1631748406b251a6dc2');
         assert.deepEqual(await verifyManifest(output, root), {
             manifestHash: document.manifestHash,

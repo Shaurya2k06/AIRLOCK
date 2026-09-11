@@ -31,7 +31,7 @@ live Attestcoin gate.
 6. Run `LIVE_STEP=revoke npm run live-step`; this prepares the bounded blocked
    intent before publishing the source revocation.
 7. Import the revocation proof.
-8. Run `LIVE_STEP=blocked npm run live-step`; the router simulation must revert.
+8. Run `LIVE_STEP=blocked npm run live-step`; the router static call must revert.
 
 TEE extension rehearsal: set `TEE_REQUIRED=true`, `TEE_MEASUREMENT`, and
 `TEE_QUOTE_HASH` only after the verifier has independently validated the quote,
@@ -43,9 +43,9 @@ This flow is verifier-attested, not an on-chain hardware-quote proof.
 
 The same sequence can be driven by `WORKER_ONCE=true npm run worker` for a
 single source scan, or `npm run worker` for polling/retry behavior.
-The deployed vault holds the demo `MockStablecoin` for the vendor payment and
-native test value only for the bounded deposit action.
-The signer accepts only the typed `stablecoin.transfer` proposal shape; it
+The deployed vault holds only the native value required by the approved
+payment and deposit actions. The signer accepts only the typed `vendor.pay`
+proposal shape; it
 never accepts a caller-supplied target, selector, or raw calldata.
 
 ## Negative cases to show

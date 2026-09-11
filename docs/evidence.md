@@ -1,22 +1,17 @@
 # AIRLOCK live deployment evidence
 
-This is the non-secret evidence snapshot from the live run completed on
-2026-09-11. The exact public deployment record is in
-[`deployment-manifest.json`](deployment-manifest.json). Private keys and RPC
-credentials are intentionally excluded. The independent clean-clone replay is
-summarized in [`rehearsal.md`](rehearsal.md).
+This snapshot records the corrected live testnet run completed on 2026-09-11.
+The deployment manifest contains public addresses and transaction hashes only;
+private keys and RPC credentials are not committed.
 
 ## Networks
 
 | Field | Value |
 | --- | --- |
-| Source network | Ethereum Sepolia |
-| Source EVM chain ID | `11155111` |
-| Source Attestcoin chain key | `1` |
-| Destination network | Creditcoin CC3 testnet |
-| Destination EVM chain ID | `102031` |
+| Source | Ethereum Sepolia (`11155111`) |
+| Destination | Creditcoin CC3 testnet (`102031`) |
+| Attestcoin chain key | `1` |
 | BlockProver | `0x0000000000000000000000000000000000000fd2` |
-| ChainInfo | `0x0000000000000000000000000000000000000fd3` |
 
 ## Release commitment
 
@@ -25,65 +20,59 @@ summarized in [`rehearsal.md`](rehearsal.md).
 | `orgId` | `0x19f14d9c15d90b47249d88d3fb11ada9dda7ba4d690fc48c533d1217ee726fa0` |
 | `releaseId` | `0x8e0a115b6ca14dc079f590175807a4ef26d840174a4e5bdeaed593f888f6324b` |
 | `agentId` | `0xc9bb4c9317790d917fe2da888cda19c1c96a65a7b8393ec0959bc352361d8c31` |
-| `releaseDigest` | `0x29f4f4adeda033296787e13806c9634b6c00f984035ac1605f21fdd21ffddecc` |
-| `manifestHash` | `0x0012b5d8bc3785a644ba5dc270b56e9b25507d661ddf13effd8f26c0e55b43f3` |
-| `artifactRoot` | `0xe7b55ed2c63a87e94b60b7e90052f43a411a6bbfe1cbe38add7bf44fe269c322` |
-| `policyHash` | `0x460c17c0044cc16883183ad9ecc9e78e425ccbaf2ee469deaba209c5cf867b21` |
-| `scopeRoot` | `0x40f775477891f156919c91d48025c10865db151cf7fe5c930d45a11d7f954ce0` |
+| `releaseDigest` | `0xbea1ea89d965991de8970e53575e75b45b88520129f346c4243538965f4f5c86` |
+| `manifestHash` | `0xa3202a9663c5a38ff7fcf9b71565f38fa97e9930796fda0d7c7cd68f489a913e` |
+| `artifactRoot` | `0xf9c2815cca7dfbb8a62851a696eae7486cdea2dc730785293ed0c0378fdf46cc` |
+| `policyHash` | `0xb6f489c5a41ff7f01fdbaffb391a65707d7a2d57a76477d255786c98fb1f88f1` |
+| runtime assurance | `L0` — artifact bound, not runtime weight attestation |
 
 ## Deployed contracts
 
 | Network | Contract | Address |
 | --- | --- | --- |
-| Sepolia | ArtifactRegistry | [`0xe2817553339aCFC3a16DFDe0C2e858e10b617017`](https://sepolia.etherscan.io/address/0xe2817553339aCFC3a16DFDe0C2e858e10b617017) |
-| Sepolia | EvaluationRegistry | [`0x0549a6e3aE3cf058BE3d20FBECe468e6c234b76b`](https://sepolia.etherscan.io/address/0x0549a6e3aE3cf058BE3d20FBECe468e6c234b76b) |
-| Sepolia | DeploymentApprovalRegistry | [`0x6031c4818E94beC3D909188312F8dB0001db6d1d`](https://sepolia.etherscan.io/address/0x6031c4818E94beC3D909188312F8dB0001db6d1d) |
-| Sepolia | ReleaseStatusRegistry | [`0xC2fFBDFF6f4C29Dc3D506534ffcc91B67f5618D0`](https://sepolia.etherscan.io/address/0xC2fFBDFF6f4C29Dc3D506534ffcc91B67f5618D0) |
-| Creditcoin | OfficialReceiptDecoder | [`0x9c3E58A02803BA1c3F9AD92fbac9DeAF26429467`](https://creditcoin-testnet.blockscout.com/address/0x9c3E58A02803BA1c3F9AD92fbac9DeAF26429467) |
-| Creditcoin | EvidenceRegistry | [`0x25F25A9604783CFecAff97e90B0927d006B11C1a`](https://creditcoin-testnet.blockscout.com/address/0x25F25A9604783CFecAff97e90B0927d006B11C1a) |
-| Creditcoin | AirlockAttestcoinAdapter | [`0x8B85fC6c3295a442e158eD88CBAEa1c6A9D2676d`](https://creditcoin-testnet.blockscout.com/address/0x8B85fC6c3295a442e158eD88CBAEa1c6A9D2676d) |
-| Creditcoin | PolicyRegistry | [`0x039DAfa5FaB66797Df264b251d07FBaC06f7a2B8`](https://creditcoin-testnet.blockscout.com/address/0x039DAfa5FaB66797Df264b251d07FBaC06f7a2B8) |
-| Creditcoin | CapabilityIssuer | [`0xB63a439a53490006b136d332fb0433A6d3208C16`](https://creditcoin-testnet.blockscout.com/address/0xB63a439a53490006b136d332fb0433A6d3208C16) |
-| Creditcoin | AgentVault | [`0x8d3344a2d5780c83E1a887AbaeFcCcdBfF1A3bA3`](https://creditcoin-testnet.blockscout.com/address/0x8d3344a2d5780c83E1a887AbaeFcCcdBfF1A3bA3) |
-| Creditcoin | ToolRouter | [`0xC2B3B8D4bc80409FB17C74B6C0dfC808f234Ca76`](https://creditcoin-testnet.blockscout.com/address/0xC2B3B8D4bc80409FB17C74B6C0dfC808f234Ca76) |
-| Creditcoin | MockStablecoin | [`0x4f55c93d57dB7c64bF6a6384EC6C74e3f838d124`](https://creditcoin-testnet.blockscout.com/address/0x4f55c93d57dB7c64bF6a6384EC6C74e3f838d124) |
-| Creditcoin | BoundedDepositProtocol | [`0x4A72223f069E0066Ed8B624bCf35C582bbCE8ff9`](https://creditcoin-testnet.blockscout.com/address/0x4A72223f069E0066Ed8B624bCf35C582bbCE8ff9) |
-| Creditcoin | PaymentValidator | [`0x1919318D729FCf06AA9197b34E227F9fe04139B6`](https://creditcoin-testnet.blockscout.com/address/0x1919318D729FCf06AA9197b34E227F9fe04139B6) |
-| Creditcoin | DepositValidator | [`0x2C975DfCf837969bc19fcA27930Ad1E40CB2055c`](https://creditcoin-testnet.blockscout.com/address/0x2C975DfCf837969bc19fcA27930Ad1E40CB2055c) |
-
-The four Sepolia registries are source-verified on Sourcify: [ArtifactRegistry](https://sourcify.dev/server/repo-ui/11155111/0xe2817553339aCFC3a16DFDe0C2e858e10b617017), [EvaluationRegistry](https://sourcify.dev/server/repo-ui/11155111/0x0549a6e3aE3cf058BE3d20FBECe468e6c234b76b), [DeploymentApprovalRegistry](https://sourcify.dev/server/repo-ui/11155111/0x6031c4818E94beC3D909188312F8dB0001db6d1d), and [ReleaseStatusRegistry](https://sourcify.dev/server/repo-ui/11155111/0xC2fFBDFF6f4C29Dc3D506534ffcc91B67f5618D0). All eleven Creditcoin contracts are source-verified on Blockscout; their `#code` links are recorded in [`deployment-manifest.json`](deployment-manifest.json).
+| Sepolia | ArtifactRegistry | [`0xeAa8d11Fb488adf4cA473A9B970D4155A880C7BF`](https://sepolia.etherscan.io/address/0xeAa8d11Fb488adf4cA473A9B970D4155A880C7BF) |
+| Sepolia | EvaluationRegistry | [`0x65F12edb1A6a479B2A6Ad3Bc40d44427aaCB8952`](https://sepolia.etherscan.io/address/0x65F12edb1A6a479B2A6Ad3Bc40d44427aaCB8952) |
+| Sepolia | DeploymentApprovalRegistry | [`0xE72e2fF706258DC1E5ef783d8FF9fA5f59A9c92e`](https://sepolia.etherscan.io/address/0xE72e2fF706258DC1E5ef783d8FF9fA5f59A9c92e) |
+| Sepolia | ReleaseStatusRegistry | [`0xf392ebcEE8f118696e69C0606C1267afA7816431`](https://sepolia.etherscan.io/address/0xf392ebcEE8f118696e69C0606C1267afA7816431) |
+| Creditcoin | OfficialReceiptDecoder | [`0x35b106de527F7fC58fd1936CDd1b4069E0Da42b6`](https://creditcoin-testnet.blockscout.com/address/0x35b106de527F7fC58fd1936CDd1b4069E0Da42b6) |
+| Creditcoin | EvidenceRegistry | [`0xCA36Cd4eb2f81eb6A76B8d3701aF17b5b43e5b23`](https://creditcoin-testnet.blockscout.com/address/0xCA36Cd4eb2f81eb6A76B8d3701aF17b5b43e5b23) |
+| Creditcoin | AirlockAttestcoinAdapter | [`0x4Cc57B9e9945e7E24EBd9081a3978222bFCe9Eab`](https://creditcoin-testnet.blockscout.com/address/0x4Cc57B9e9945e7E24EBd9081a3978222bFCe9Eab) |
+| Creditcoin | PolicyRegistry | [`0x1B43F6B66f200A3cA7f08991fc5D4934A133A8cB`](https://creditcoin-testnet.blockscout.com/address/0x1B43F6B66f200A3cA7f08991fc5D4934A133A8cB) |
+| Creditcoin | RuntimeBindingRegistry | [`0x347802C070007E0194169301318E4dCC5d8d646c`](https://creditcoin-testnet.blockscout.com/address/0x347802C070007E0194169301318E4dCC5d8d646c) |
+| Creditcoin | CapabilityIssuer | [`0x0f79ab9573ae94544442D0D7DBD0B0eFd6E404d9`](https://creditcoin-testnet.blockscout.com/address/0x0f79ab9573ae94544442D0D7DBD0B0eFd6E404d9) |
+| Creditcoin | CapabilityDelegationRegistry | [`0x3672d15Abb4b9C8b9e26b3ba060f69784fe38d7f`](https://creditcoin-testnet.blockscout.com/address/0x3672d15Abb4b9C8b9e26b3ba060f69784fe38d7f) |
+| Creditcoin | AgentVault | [`0xb58E4F9aa0e475a80B31bB2E5eE4D6aa824d448A`](https://creditcoin-testnet.blockscout.com/address/0xb58E4F9aa0e475a80B31bB2E5eE4D6aa824d448A) |
+| Creditcoin | ToolRouter | [`0x3a217Ce7b91CB7E5d83063496E7b1bD75adEE419`](https://creditcoin-testnet.blockscout.com/address/0x3a217Ce7b91CB7E5d83063496E7b1bD75adEE419) |
+| Creditcoin | BoundedDepositProtocol | [`0xA0e835903F8D517ab30410976FB2569e677714f5`](https://creditcoin-testnet.blockscout.com/address/0xA0e835903F8D517ab30410976FB2569e677714f5) |
+| Creditcoin | NativePaymentValidator | [`0x4796bE3f0CAC55dCB558D95c6Bc6835040ee5aD5`](https://creditcoin-testnet.blockscout.com/address/0x4796bE3f0CAC55dCB558D95c6Bc6835040ee5aD5) |
+| Creditcoin | BoundedDepositValidator | [`0xfAbCF676dAC109092494D156c63f803f6D2Cf901`](https://creditcoin-testnet.blockscout.com/address/0xfAbCF676dAC109092494D156c63f803f6D2Cf901) |
 
 ## Proven source events
 
-Every row below uses the same `releaseDigest`. Each source receipt had status
-`1`; the corresponding import transaction was accepted by the deployed
-Creditcoin adapter.
+Each source receipt returned status `1`; each corresponding Attestcoin proof
+was accepted by the deployed Creditcoin adapter.
 
-| Evidence | Source transaction | Block / tx index | Creditcoin import |
+| Evidence | Source transaction | Block | Creditcoin import |
 | --- | --- | --- | --- |
-| Artifact publication | [`0x444a13…5726bf1`](https://sepolia.etherscan.io/tx/0x444a13f744582ff57802057b1737ccf3f86c9e8b220fbf737926ae0ea5726bf1) | `11679084 / 130` | [`0x431257…137b8cb`](https://creditcoin-testnet.blockscout.com/tx/0x431257721df68650444414a9ef91cd2361a9fe7614ceb1f8e806f0461137b8cb) |
-| Evaluation certification | [`0xc4bcc…78b257`](https://sepolia.etherscan.io/tx/0xc4bccce810a22c764f83cbc1ce2650b3f4166087109052c0973a93d69778b257) | `11679085 / 105` | [`0xbbe108…153b34`](https://creditcoin-testnet.blockscout.com/tx/0xbbe108730d7f94a837820e72209c42d35236f9dcafd827218a12aabe10153b34) |
-| Deployment approval | [`0xd31d96…bfeaac`](https://sepolia.etherscan.io/tx/0xd31d96c805cd9eb500e3d434d2566cc4c1aba0402dce020e68003e23ebbfeaac) | `11679086 / 78` | [`0x30b61a…c5cc`](https://creditcoin-testnet.blockscout.com/tx/0x30b61e8ee7e80e35c092674972575dc28707233e27717a5456c1a63ddc3cc5cc) |
-| Active status | [`0x32a745…fc581`](https://sepolia.etherscan.io/tx/0x32a7450775f33be76fada63fb9a3b639ca357fd8b8cf65a221394f3cc25fc581) | `11679087 / 131` | [`0x1aaf01…7bfe`](https://creditcoin-testnet.blockscout.com/tx/0x1aaf017bcc69a8794703a09ca17b70b8c3ec3467fa4d79a48528f87652c77bfe) |
-| Revocation | [`0x3231c6…6a167`](https://sepolia.etherscan.io/tx/0x3231c60436ee086643f41a5e853a1b32edbe88f30405a4fb910cd0590876a167) | `11679139 / 75` | [`0x13b2cc…bfe24`](https://creditcoin-testnet.blockscout.com/tx/0x13b2cc9dfd0b5f013016f296f50ec781060d406edcafacdd9ae4ec74873bfe24) |
-
-Proof sizes / Creditcoin gas: artifact `2400 B / 471418`, evaluation
-`2208 B / 392518`, approval `2272 B / 389998`, status `1888 B / 377230`, and
-revocation `1824 B / 374542`.
+| Artifact publication | [`0x995187…d357ea`](https://sepolia.etherscan.io/tx/0x995187db6cb29adc14fe46ef764eaf1894c8e2e719028eb7b0e251254ad357ea) | `11681792` | [`0xc666a0…7f5123`](https://creditcoin-testnet.blockscout.com/tx/0xc666a0cbff1f860fd3ff28b3e338641e0bcb41ffd033fe6e3779398d837f5123) |
+| Evaluation certification | [`0xdf4d33…c53c1a2`](https://sepolia.etherscan.io/tx/0xdf4d33b46c2aa0ada036068a8dc3349494c7bec40d031fa56c87e796cc53c1a2) | `11681793` | [`0xd13872…ac8a7`](https://creditcoin-testnet.blockscout.com/tx/0xd1387294266071049f56c57bce8af895eeb3cef6bc00e49156390f92204ac8a7) |
+| Deployment approval | [`0x41145a…04de5d`](https://sepolia.etherscan.io/tx/0x41145ad24c74e0c98c18b810ac185a7bef67adae87312d1569143d821704de5d) | `11681794` | [`0x90fa9d…6038c4`](https://creditcoin-testnet.blockscout.com/tx/0x90fa9d9ba211f16b4ac36424ebc5dc9ab84b73ed9d8bbc19d43bebd58b6038c4) |
+| Active status | [`0x1568b1…16834`](https://sepolia.etherscan.io/tx/0x1568b177443aee31bd80ae9ac747477a0f559e8383305b126d358e3d81816834) | `11681796` | [`0xb3ee49…8287f`](https://creditcoin-testnet.blockscout.com/tx/0xb3ee49e51ea38e2b14004c10193e407e6ad96dae11e28b6b386addba77c8287f) |
+| Revocation | [`0xaa1142…d46f6`](https://sepolia.etherscan.io/tx/0xaa1142d78b7ca6c7c7b64e51dc380a39d05d074dd6d9df258b8323c08aad46f6) | `11681853` | [`0x0f5c09…f0ce9`](https://creditcoin-testnet.blockscout.com/tx/0x0f5c090f5a3b7bc7c21da37471a26113c9eeefad4b45e370d8f06d4eac2f0ce9) |
 
 ## Live enforcement
 
-| Result | Transaction / evidence |
+| Result | Evidence |
 | --- | --- |
-| Capability issued | `0xdd3f8e3f3eeb713e5e103da58825b6464c5392d558f81ee378d143aa7158dd9c`; issue tx [`0xff372a…f4814`](https://creditcoin-testnet.blockscout.com/tx/0xff372aa96df54e202644b3294f63ae7071be96b844b20addcffa17561f8f4814) |
-| Allowed payment | [`0xcaa17e…a416f`](https://creditcoin-testnet.blockscout.com/tx/0xcaa17e9c1c9648f2bfccaacbe71e4c55fd1869129aa68bf4cea67f7221da416f) |
-| Allowed bounded deposit | [`0x2fdbde…f37e8`](https://creditcoin-testnet.blockscout.com/tx/0x2fdbde8adeb856b911d9e9d3c44dfff4d3605a2af0b7493bb0aedb505d9f37e8) |
-| Post-revocation action | Static router simulation rejected: `{ blocked: true, reason: "proven revocation" }` |
+| Capability issued | `0xb14e7b…964196`; issue tx [`0x42f7b2…5f8f4a`](https://creditcoin-testnet.blockscout.com/tx/0x42f7b24e12650531812e63f291183f4606769412ac81b275c07805c9cb5f8f4a) |
+| Root native payment allowed | [`0x67f6df…d5c64`](https://creditcoin-testnet.blockscout.com/tx/0x67f6dff4baa1b0c093effabb121f280af8b4066539ac7a44bb3d0a176c4d5c64) |
+| Child delegation registered | child `0x28411e…87783`; [`0x7d9434…3df28`](https://creditcoin-testnet.blockscout.com/tx/0x7d94340be2be88b80dbe2dbb34e3d1cfd5a5494ce473c701986d1b07d313df28) |
+| Child native payment allowed | [`0x720c4b…8da1d`](https://creditcoin-testnet.blockscout.com/tx/0x720c4b463394ee4aae9e12734dd29526dcb441b6311bc661626b08850188da1d) |
+| Post-revocation action | Router `staticCall` rejected with `{ blocked: true, reason: "proven revocation" }` |
 
-The capability consumed `0.11` total spend across the two allowed validators
-(`0.01` payment plus `0.10` deposit) before the proven revocation. The local
-contract suite separately covers wrong recipient, excessive value, calldata
-mutation, replay, direct-vault, signature, pause, fuzz, and invariant cases.
+The live payment path uses native value and `NativePaymentValidator`; no test
+token is deployed by the live deployment script. The local Solidity suite still
+contains an isolated token fixture for validator accounting tests.
 
 ## Reproduction
 
@@ -96,12 +85,11 @@ IMPORT_KIND=evaluation npm run import-proof
 IMPORT_KIND=approval npm run import-proof
 IMPORT_KIND=status npm run import-proof
 LIVE_STEP=execute npm run live-step
-LIVE_STEP=deposit npm run live-step
 LIVE_STEP=revoke npm run live-step
 IMPORT_KIND=revocation npm run import-proof
 LIVE_STEP=blocked npm run live-step
 ```
 
-This is a Sepolia → Attestcoin → Creditcoin CC3 testnet run. Base mode binds
-the release digest to a runtime key; it does not prove that a running process
-loaded the committed model weights. The optional TEE mode remains separate.
+This is a Sepolia → Attestcoin → Creditcoin CC3 testnet run. L0 binds the
+release digest to a runtime key; it does not prove that a running process loaded
+the committed model weights. Higher runtime assurance remains opt-in.

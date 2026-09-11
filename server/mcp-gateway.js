@@ -1,0 +1,109 @@
+const { getAddress, isAddress } = require('ethers')
+
+const MCP_PROTOCOL_VERSION = '2026-07-28'
+
+const toolDefinitions = {
+  'vendor.pay': {
+    name: 'vendor.pay',
+    description: 'Pay the release-approved vendor through the AIRLOCK router.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['recipient', 'amount'],
+      properties: {
+        recipient: { type: 'string', description: 'Approved recipient address.' },
+        amount: { type: 'string', pattern: '^[0-9]+(\\.[0-9]{1,18})?$', description: 'Amount in native token units.' },
+      },
+    },
+    riskLevel: 0,
+    runbookStep: 'execute',
+  },
+  'protocol.deposit': {
+    name: 'protocol.deposit',
+    description: 'Make the release-approved bounded protocol deposit.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: [],
+      properties: {},
+    },
+    riskLevel: 0,
+    runbookStep: 'deposit',
+  },
+}
+
+function jsonRpcResult(id, result) {
+  return { jsonrpc: '2.0', id: id ?? null, result }
+}
+
+function jsonRpcError(id, code, message, data) {
+  return { jsonrpc: '2.0', id: id ?? null, error: { code, message, ...(data === undefined ? {} : { data }) } }
+}
+
+function denial(code, reason, extra = {}) {
+  return { isError: true, content: [{ type: 'text', text: reason }], structuredContent: { decision: 'DENY', code, reason, ...extra } }
+}
+
+function authorizedTools(credential, overview) {
+  if (!credential || !overview || overview.release.status !== 'ACTIVE' || overview.capability.status !== 'ACTIVE') return []
+  return (credential.allowedTools || []).filter((name) => toolDefinitions[name]).map((name) => {
+    const { riskLevel, runbookStep, ...tool } = toolDefinitions[name]
+    return tool
+  })
+}
+
+function validateArguments(name, args, overview) {
+  if (name === 'vendor.pay') {
+    if (!isAddress(args?.recipient)) return { ok: false, code: 'INVALID_RECIPIENT', reason: 'recipient must be an EVM address' }
+    const recipient = getAddress(args.recipient)
+    if (recipient !== getAddress(overview.policy.recipient)) return { ok: false, code: 'RECIPIENT_OUT_OF_SCOPE', reason: 'recipient is outside the approved capability scope' }
+    const amount = Number(args.amount)
+    if (!Number.isFinite(amount) || amount <= 0) return { ok: false, code: 'INVALID_AMOUNT', reason: 'amount must be positive' }
+    if (amount > overview.policy.maxPayment) return { ok: false, code: 'BUDGET_EXCEEDED', reason: 'amount exceeds the per-call capability ceiling' }
+    return { ok: true, args: { recipient, amount: String(args.amount) } }
+  }
+  if (name === 'protocol.deposit') return { ok: true, args: {} }
+  return { ok: false, code: 'UNKNOWN_TOOL', reason: 'tool is not registered' }
+}
+
+function createMcpGateway({ getOverview, getCredential, execute }) {
+  return async function handle(request, context = {}) {
+    const id = request?.id
+    const method = request?.method
+    if (request?.jsonrpc !== '2.0' || typeof method !== 'string') return jsonRpcError(id, -32600, 'invalid JSON-RPC request')
+
+    if (method === 'initialize') {
+      return jsonRpcResult(id, {
+        protocolVersion: MCP_PROTOCOL_VERSION,
+        capabilities: { tools: { listChanged: true }, tasks: { requests: { tools: { call: {} } } } },
+        serverInfo: { name: 'AIRLOCK MCP Gateway', version: '1.0.0' },
+        instructions: 'AIRLOCK filters tool discovery and revalidates every call against the current release capability.',
+      })
+    }
+    if (method === 'notifications/initialized') return null
+    if (method === 'ping') return jsonRpcResult(id, {})
+
+    const overview = await getOverview()
+    const credential = await getCredential(context)
+    if (method === 'tools/list') {
+      return jsonRpcResult(id, { tools: authorizedTools(credential, overview), nextCursor: undefined })
+    }
+    if (method !== 'tools/call') return jsonRpcError(id, -32601, `method not found: ${method}`)
+    if (!credential) return jsonRpcError(id, -32001, 'AIRLOCK credential required', { decision: 'AUTH_REQUIRED', authentication: 'Bearer AirlockCredential <base64url-json>' })
+
+    const name = request.params?.name
+    const tool = toolDefinitions[name]
+    if (!tool || !authorizedTools(credential, overview).some((item) => item.name === name)) {
+      return jsonRpcResult(id, denial('TOOL_NOT_AUTHORIZED', 'tool is not authorized by the current capability'))
+    }
+    const checked = validateArguments(name, request.params?.arguments || {}, overview)
+    if (!checked.ok) return jsonRpcResult(id, denial(checked.code, checked.reason))
+    if (tool.riskLevel > Number(credential.riskLevel || 0)) {
+      return jsonRpcResult(id, { isError: true, content: [{ type: 'text', text: 'additional authorization required' }], structuredContent: { decision: 'AUTH_REQUIRED', code: 'STEP_UP_REQUIRED', reason: 'tool risk exceeds the credential risk level', requestedTool: name } })
+    }
+    const result = await execute(tool.runbookStep, checked.args, { credential, tool: name, requestId: id })
+    return jsonRpcResult(id, { content: [{ type: 'text', text: result.message || 'AIRLOCK action completed' }], structuredContent: { decision: result.ok ? 'ALLOW' : 'DENY', ...result } })
+  }
+}
+
+module.exports = { MCP_PROTOCOL_VERSION, toolDefinitions, createMcpGateway, jsonRpcError, jsonRpcResult, denial, validateArguments }

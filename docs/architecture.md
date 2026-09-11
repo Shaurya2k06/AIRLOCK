@@ -53,7 +53,7 @@ RuntimeBindingRegistry
 | `RuntimeBindingRegistry` | Creditcoin | verifier-attested measurement/key/artifact binding for TEE-required policies |
 | `ToolRouter` | Creditcoin | EIP-712, scope proof, validator, nonce, idempotency, execution |
 | `AgentVault` | Creditcoin | custody and router-only execution with timelocked recovery |
-| `MockStablecoin` | Creditcoin demo | bounded token balance held by the vault for vendor payments |
+| `NativePaymentValidator` | Creditcoin | validates bounded native-value payments to the approved recipient |
 
 Base mode binds a release digest to a runtime signing key. It does not prove
 that a running process loaded those weights. TEE-required mode adds a

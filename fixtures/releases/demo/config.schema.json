@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AIRLOCK agent runtime configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "mcpEndpoint": { "type": "string", "format": "uri" },
+    "a2aEndpoint": { "type": "string", "format": "uri" },
+    "runtimeAssurance": { "enum": ["L0", "L1", "L2", "L3"] }
+  },
+  "required": ["mcpEndpoint", "a2aEndpoint", "runtimeAssurance"]
+}

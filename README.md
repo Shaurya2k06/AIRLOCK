@@ -75,7 +75,7 @@ not configuration inputs.
 
 - `contracts/contracts/Airlock.sol` — source registries, evidence adapter,
   official decoder boundary, policy, capabilities, EIP-712 router, vault,
-  mock stablecoin/deposit validators, and local proof fixtures.
+  native-payment/deposit validators, and isolated local proof fixtures.
 - `contracts/contracts/Airlock.t.sol` — end-to-end contract scenarios,
   including proven revocation and negative actions.
 - `contracts/scripts/manifest.mjs` — canonical CBOR manifest, artifact Merkle
@@ -87,7 +87,12 @@ not configuration inputs.
   binding registration for TEE-required policies.
 - `contracts/scripts/worker.ts` — cursor-backed source watcher and proof retry
   loop.
-- `server/index.js` — fixture/live read-only control-plane API.
+- `server/index.js` — chain-backed control-plane API.
+- `server/credential.js`, `server/mcp-gateway.js`, and `server/a2a.js` —
+  release-bound credentials and capability-aware agent protocol gateways.
+- `server/erc8004.js`, `server/evaluator-quorum.js`, `server/trace.js`, and
+  `server/x402.js` — identity, independent evaluation, trace, and payment
+  adapters with explicit configuration gates.
 - `client/src/App.tsx` — evidence, capability, and enforcement console.
 - `docs/` — architecture, Attestcoin integration, threat model, live evidence,
   deployment manifest, rehearsal evidence, and demo runbook.
@@ -95,3 +100,6 @@ not configuration inputs.
 The base-mode claim is deliberately narrow: the capability binds a release
 digest to a runtime key; it does not prove that a running process loaded those
 weights. That requires the optional TEE binding described in `context.md`.
+
+The protocol extension details and honest integration boundaries are documented
+in [`docs/protocol.md`](docs/protocol.md).

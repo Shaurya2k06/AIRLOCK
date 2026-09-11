@@ -27,8 +27,9 @@ local fixtures. `OfficialReceiptDecoder` wraps the pinned `@gluwa/asc-contracts`
 EVM V1 decoder, while the adapter calls Creditcoin's native BlockProver ABI.
 
 The test covers separate source roles, proof and replay checks, deterministic
-issuance, EIP-712 intents, scope proofs, mock-stablecoin and deposit
-validators, vault containment, budgets, idempotency, and proven revocation.
+issuance, EIP-712 intents, scope proofs, native-payment and deposit validators,
+vault containment, budgets, idempotency, and proven revocation. The isolated
+unit suite also keeps an in-memory token fixture for accounting fuzz cases.
 The suite also runs a bounded stablecoin accounting fuzz test and a capability
 spend/call invariant.
 
@@ -53,10 +54,10 @@ LIVE_STEP=blocked npm run live-step
 source events. `import-proof` uses the saved transaction hashes unless
 `SOURCE_TX_HASH` is set, waits for the source height to be attested, asks the
 official Proof Builder for the proof, and submits it with the gas-only worker.
-`live-step` issues and executes the capability, exercises the bounded deposit
-validator, emits revocation after the allowed actions, and simulates the
-post-revocation action to prove it is blocked.
-Set `INTENT_FILE` to a JSON proposal with `tool: "stablecoin.transfer"`, a
+`live-step` issues and executes the capability, sends a bounded native payment
+and deposit through the router, emits revocation after the allowed actions,
+and statically checks that the post-revocation action is blocked.
+Set `INTENT_FILE` to a JSON proposal with `tool: "vendor.pay"`, a
 recipient, and an amount to exercise the isolated signer; it rejects recipients
 or amounts outside the deployed capability before signing.
 

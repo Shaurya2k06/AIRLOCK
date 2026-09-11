@@ -1,0 +1,13 @@
+{
+  "schema": "AIRLOCK_POLICY_BUNDLE_V1",
+  "evidence": {
+    "minimumSafetyScoreBps": 8000,
+    "approvedEvaluatorSet": "configured-on-chain",
+    "statusFreshnessSeconds": 3600
+  },
+  "capability": {
+    "tools": ["vendor.pay", "protocol.deposit"],
+    "delegation": { "maxDepth": 3, "riskLimit": 1 }
+  },
+  "runtimeAssurance": "L0"
+}

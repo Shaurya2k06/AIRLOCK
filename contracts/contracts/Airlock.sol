@@ -1309,6 +1309,7 @@ contract CapabilityIssuer is RoleAddress {
     error PausedCapability();
     error TEERequired();
     error InvalidRouter();
+    error InvalidDelegationRegistry();
 
     struct Capability {
         bytes32 orgId;
@@ -1333,6 +1334,7 @@ contract CapabilityIssuer is RoleAddress {
     RuntimeBindingRegistry public immutable runtimeBindings;
     address public immutable guardian;
     address public router;
+    address public delegationRegistry;
     mapping(bytes32 => Capability) private _capabilities;
     mapping(bytes32 => uint64) public nextEpoch;
     mapping(bytes32 => bool) public orgPaused;
@@ -1362,8 +1364,21 @@ contract CapabilityIssuer is RoleAddress {
         router = router_;
     }
 
+    function setDelegationRegistry(address delegationRegistry_) external onlyRole {
+        if (delegationRegistry != address(0) || delegationRegistry_ == address(0)) revert InvalidDelegationRegistry();
+        delegationRegistry = delegationRegistry_;
+    }
+
     function get(bytes32 capabilityId) external view returns (Capability memory) {
         return _capabilities[capabilityId];
+    }
+
+    function isActive(bytes32 capabilityId) external view returns (bool) {
+        Capability memory current = _capabilities[capabilityId];
+        return current.runtimeKey != address(0)
+            && !current.revoked
+            && block.timestamp >= current.notBefore
+            && block.timestamp < current.expiresAt;
     }
 
     function issue(bytes32 orgId, bytes32 agentId, bytes32 releaseDigest, bytes32 policyHash)
@@ -1461,7 +1476,7 @@ contract CapabilityIssuer is RoleAddress {
     }
 
     function consume(bytes32 capabilityId, uint256 value) external returns (Capability memory capability) {
-        if (msg.sender != router || router == address(0)) revert Unauthorized();
+        if ((msg.sender != router && msg.sender != delegationRegistry) || router == address(0)) revert Unauthorized();
         Capability storage current = _capabilities[capabilityId];
         if (current.runtimeKey == address(0) || current.revoked) revert PausedCapability();
         if (
@@ -1596,6 +1611,219 @@ interface IIntentValidator {
     ) external view returns (uint256 chargedValue);
 }
 
+interface ICapabilityIssuerState {
+    struct Capability {
+        bytes32 orgId;
+        bytes32 agentId;
+        bytes32 releaseDigest;
+        bytes32 policyHash;
+        bytes32 scopeRoot;
+        address runtimeKey;
+        uint128 spendCap;
+        uint128 spent;
+        uint128 perCallValueCap;
+        uint32 callCap;
+        uint32 callsUsed;
+        uint64 notBefore;
+        uint64 expiresAt;
+        uint64 epoch;
+        bool revoked;
+    }
+
+    function get(bytes32 capabilityId) external view returns (Capability memory);
+    function isActive(bytes32 capabilityId) external view returns (bool);
+    function consume(bytes32 capabilityId, uint256 value) external returns (Capability memory);
+}
+
+/// @notice On-chain parent/child capability graph for bounded multi-agent delegation.
+/// @dev Child scope roots must equal the parent root until a richer subset proof is registered.
+///      Parent state is checked on every read, so revoking a parent cascades immediately.
+contract CapabilityDelegationRegistry is RoleAddress {
+    error MissingParent();
+    error InvalidDelegation();
+    error DuplicateDelegation();
+    error DelegationAlreadyRevoked();
+    error UnauthorizedGuardian();
+    error RouterAlreadySet();
+    error BudgetExceeded();
+    error PausedDelegation();
+
+    struct Delegation {
+        bool exists;
+        bool revoked;
+        bytes32 childCapabilityId;
+        bytes32 parentCapabilityId;
+        bytes32 childAgentId;
+        bytes32 scopeRoot;
+        address runtimeKey;
+        uint128 budget;
+        uint128 spent;
+        uint32 maxCalls;
+        uint32 callsUsed;
+        uint64 validAfter;
+        uint64 validUntil;
+        uint8 depth;
+        bytes32 taskId;
+    }
+
+    ICapabilityIssuerState public immutable issuer;
+    address public immutable guardian;
+    address public router;
+    mapping(bytes32 => Delegation) private _delegations;
+
+    event DelegationRegistered(
+        bytes32 indexed childCapabilityId,
+        bytes32 indexed parentCapabilityId,
+        bytes32 indexed taskId,
+        bytes32 childAgentId,
+        bytes32 scopeRoot,
+        address runtimeKey,
+        uint128 budget,
+        uint32 maxCalls,
+        uint64 validAfter,
+        uint64 validUntil,
+        uint8 depth
+    );
+    event DelegationRevoked(bytes32 indexed childCapabilityId, bytes32 indexed parentCapabilityId);
+
+    constructor(address admin, address guardian_, address issuer_) RoleAddress(admin) {
+        if (guardian_ == address(0) || issuer_ == address(0)) revert ZeroAddress();
+        guardian = guardian_;
+        issuer = ICapabilityIssuerState(issuer_);
+    }
+
+    function setRouter(address router_) external onlyRole {
+        if (router != address(0) || router_ == address(0)) revert RouterAlreadySet();
+        router = router_;
+    }
+
+    function register(
+        bytes32 childCapabilityId,
+        bytes32 parentCapabilityId,
+        bytes32 childAgentId,
+        bytes32 scopeRoot,
+        address runtimeKey,
+        uint128 budget,
+        uint32 maxCalls,
+        uint64 validAfter,
+        uint64 validUntil,
+        uint8 depth,
+        bytes32 taskId
+    ) external onlyRole {
+        if (_delegations[childCapabilityId].exists) revert DuplicateDelegation();
+        if (childCapabilityId == bytes32(0) || parentCapabilityId == bytes32(0) || runtimeKey == address(0)) {
+            revert InvalidDelegation();
+        }
+        Delegation memory parentDelegation = _delegations[parentCapabilityId];
+        bool parentIsDelegation = parentDelegation.exists;
+        if (parentIsDelegation) {
+            if (!isActive(parentCapabilityId)) revert MissingParent();
+        } else if (!issuer.isActive(parentCapabilityId)) {
+            revert MissingParent();
+        }
+        ICapabilityIssuerState.Capability memory parent = issuer.get(parentCapabilityId);
+        bytes32 parentScope = parentIsDelegation ? parentDelegation.scopeRoot : parent.scopeRoot;
+        uint128 parentBudget = parentIsDelegation ? parentDelegation.budget : parent.spendCap - parent.spent;
+        uint32 parentCalls = parentIsDelegation ? parentDelegation.maxCalls : parent.callCap - parent.callsUsed;
+        uint64 parentNotBefore = parentIsDelegation ? parentDelegation.validAfter : parent.notBefore;
+        uint64 parentExpiry = parentIsDelegation ? parentDelegation.validUntil : parent.expiresAt;
+        uint8 parentDepth = parentIsDelegation ? parentDelegation.depth : 0;
+        if (
+            scopeRoot != parentScope
+                || budget > parentBudget
+                || maxCalls > parentCalls
+                || validUntil <= validAfter
+                || validAfter < parentNotBefore
+                || validUntil > parentExpiry
+                || depth == 0
+                || depth != parentDepth + 1
+                || depth > 16
+        ) revert InvalidDelegation();
+        _delegations[childCapabilityId] = Delegation({
+            exists: true,
+            revoked: false,
+            childCapabilityId: childCapabilityId,
+            parentCapabilityId: parentCapabilityId,
+            childAgentId: childAgentId,
+            scopeRoot: scopeRoot,
+            runtimeKey: runtimeKey,
+            budget: budget,
+            spent: 0,
+            maxCalls: maxCalls,
+            callsUsed: 0,
+            validAfter: validAfter,
+            validUntil: validUntil,
+            depth: depth,
+            taskId: taskId
+        });
+        emit DelegationRegistered(
+            childCapabilityId,
+            parentCapabilityId,
+            taskId,
+            childAgentId,
+            scopeRoot,
+            runtimeKey,
+            budget,
+            maxCalls,
+            validAfter,
+            validUntil,
+            depth
+        );
+    }
+
+    function revoke(bytes32 childCapabilityId) external {
+        if (msg.sender != guardian && msg.sender != role) revert UnauthorizedGuardian();
+        Delegation storage current = _delegations[childCapabilityId];
+        if (!current.exists) revert MissingParent();
+        if (current.revoked) revert DelegationAlreadyRevoked();
+        current.revoked = true;
+        emit DelegationRevoked(childCapabilityId, current.parentCapabilityId);
+    }
+
+    function get(bytes32 childCapabilityId) external view returns (Delegation memory) {
+        return _delegations[childCapabilityId];
+    }
+
+    function consume(bytes32 childCapabilityId, uint256 value)
+        external
+        returns (Delegation memory current)
+    {
+        if (msg.sender != router || router == address(0)) revert Unauthorized();
+        current = _consume(childCapabilityId, value);
+    }
+
+    function _consume(bytes32 childCapabilityId, uint256 value)
+        internal
+        returns (Delegation memory current)
+    {
+        Delegation storage stored = _delegations[childCapabilityId];
+        if (!stored.exists || stored.revoked || !isActive(childCapabilityId)) revert PausedDelegation();
+        if (value > stored.budget - stored.spent || stored.callsUsed >= stored.maxCalls) {
+            revert BudgetExceeded();
+        }
+        if (_delegations[stored.parentCapabilityId].exists) {
+            _consume(stored.parentCapabilityId, value);
+        } else {
+            issuer.consume(stored.parentCapabilityId, value);
+        }
+        stored.spent += uint128(value);
+        stored.callsUsed += 1;
+        current = stored;
+    }
+
+    function isActive(bytes32 childCapabilityId) public view returns (bool) {
+        Delegation memory current = _delegations[childCapabilityId];
+        if (!current.exists) return false;
+        bool parentActive = _delegations[current.parentCapabilityId].exists
+            ? isActive(current.parentCapabilityId)
+            : issuer.isActive(current.parentCapabilityId);
+        return !current.revoked
+            && block.timestamp >= current.validAfter
+            && block.timestamp < current.validUntil
+            && parentActive;
+    }
+}
+
 contract AgentVault {
     error Unauthorized();
     error RouterAlreadySet();
@@ -1681,6 +1909,7 @@ contract ToolRouter is RoleAddress {
         uint64 deadline;
         uint64 actionNonce;
         bytes32 idempotencyKey;
+        bytes32 traceRoot;
         bytes32 scopeLeaf;
         bytes32[] scopeProof;
         bytes data;
@@ -1688,7 +1917,7 @@ contract ToolRouter is RoleAddress {
 
     bytes32 public immutable DOMAIN_SEPARATOR;
     bytes32 public constant INTENT_TYPEHASH = keccak256(
-        "ToolIntent(bytes32 capabilityId,bytes32 agentId,address target,bytes4 functionSelector,bytes32 calldataHash,uint256 value,uint64 deadline,uint64 actionNonce,bytes32 idempotencyKey,bytes32 scopeLeaf)"
+        "ToolIntent(bytes32 capabilityId,bytes32 agentId,address target,bytes4 functionSelector,bytes32 calldataHash,uint256 value,uint64 deadline,uint64 actionNonce,bytes32 idempotencyKey,bytes32 traceRoot,bytes32 scopeLeaf)"
     );
 
     CapabilityIssuer public immutable issuer;
@@ -1696,21 +1925,24 @@ contract ToolRouter is RoleAddress {
     mapping(bytes32 => ActionRule) public actions;
     mapping(bytes32 => uint64) public nextNonce;
     mapping(bytes32 => bool) public usedIdempotency;
+    CapabilityDelegationRegistry public immutable delegation;
     bool private locked;
 
     event ActionRegistered(bytes32 indexed scopeLeaf, address indexed target, bytes4 indexed selector);
     event ActionExecuted(
         bytes32 indexed capabilityId,
         bytes32 indexed idempotencyKey,
+        bytes32 traceRoot,
         address target,
         uint256 value,
         uint256 chargedValue
     );
     event ActionDenied(bytes32 indexed capabilityId, bytes32 indexed idempotencyKey, bytes32 reason);
 
-    constructor(address admin, address issuer_, address vault_) RoleAddress(admin) {
+    constructor(address admin, address issuer_, address vault_, address delegation_) RoleAddress(admin) {
         issuer = CapabilityIssuer(issuer_);
         vault = AgentVault(payable(vault_));
+        delegation = CapabilityDelegationRegistry(delegation_);
         DOMAIN_SEPARATOR = keccak256(
             abi.encode(
                 keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
@@ -1752,6 +1984,7 @@ contract ToolRouter is RoleAddress {
                 intent.deadline,
                 intent.actionNonce,
                 intent.idempotencyKey,
+                intent.traceRoot,
                 intent.scopeLeaf
             )
         );
@@ -1766,14 +1999,32 @@ contract ToolRouter is RoleAddress {
         locked = true;
 
         CapabilityIssuer.Capability memory capability = issuer.get(intent.capabilityId);
-        if (capability.runtimeKey == address(0) || capability.agentId != intent.agentId) revert InvalidIntent();
+        CapabilityDelegationRegistry.Delegation memory child;
+        bool delegated = capability.runtimeKey == address(0);
+        address runtimeKey = capability.runtimeKey;
+        bytes32 agentId = capability.agentId;
+        bytes32 scopeRoot = capability.scopeRoot;
+        uint64 expiresAt = capability.expiresAt;
+        if (delegated) {
+            child = delegation.get(intent.capabilityId);
+            if (!child.exists || child.revoked) revert InvalidIntent();
+            runtimeKey = child.runtimeKey;
+            agentId = child.childAgentId;
+            scopeRoot = child.scopeRoot;
+            expiresAt = child.validUntil;
+        }
+        if (runtimeKey == address(0) || agentId != intent.agentId) revert InvalidIntent();
         if (issuer.targetPaused(intent.target)) revert PausedTarget();
-        if (intent.deadline < block.timestamp || intent.deadline >= capability.expiresAt) revert Expired();
+        if (intent.deadline < block.timestamp || intent.deadline >= expiresAt) revert Expired();
         if (intent.actionNonce != nextNonce[intent.capabilityId]) revert Replay();
         if (usedIdempotency[intent.idempotencyKey]) revert Replay();
         if (keccak256(intent.data) != intent.calldataHash) revert InvalidIntent();
-        if (intent.data.length < 4 || bytes4(intent.data) != intent.functionSelector) revert InvalidIntent();
-        if (!ScopeProof.verify(capability.scopeRoot, intent.scopeLeaf, intent.scopeProof)) revert UnsupportedAction();
+        if (intent.data.length == 0) {
+            if (intent.functionSelector != bytes4(0)) revert InvalidIntent();
+        } else if (intent.data.length < 4 || bytes4(intent.data) != intent.functionSelector) {
+            revert InvalidIntent();
+        }
+        if (!ScopeProof.verify(scopeRoot, intent.scopeLeaf, intent.scopeProof)) revert UnsupportedAction();
 
         ActionRule memory action = actions[intent.scopeLeaf];
         if (!action.exists || action.target != intent.target || action.selector != intent.functionSelector) {
@@ -1784,7 +2035,7 @@ contract ToolRouter is RoleAddress {
                 != intent.scopeLeaf
         ) revert UnsupportedAction();
 
-        _checkSignature(intent, signature, capability.runtimeKey);
+        _checkSignature(intent, signature, runtimeKey);
         uint256 chargedValue = IIntentValidator(action.validator).validate(
             intent.target,
             intent.functionSelector,
@@ -1793,11 +2044,12 @@ contract ToolRouter is RoleAddress {
             action.constraintsHash
         );
 
-        issuer.consume(intent.capabilityId, chargedValue);
+        if (delegated) delegation.consume(intent.capabilityId, chargedValue);
+        else issuer.consume(intent.capabilityId, chargedValue);
         nextNonce[intent.capabilityId] = intent.actionNonce + 1;
         usedIdempotency[intent.idempotencyKey] = true;
         result = vault.execute(intent.target, intent.value, intent.data);
-        emit ActionExecuted(intent.capabilityId, intent.idempotencyKey, intent.target, intent.value, chargedValue);
+        emit ActionExecuted(intent.capabilityId, intent.idempotencyKey, intent.traceRoot, intent.target, intent.value, chargedValue);
         locked = false;
     }
 
@@ -1841,6 +2093,33 @@ contract MockStablecoin {
         balanceOf[recipient] += amount;
         emit Transfer(msg.sender, recipient, amount);
         return true;
+    }
+}
+
+contract NativePaymentValidator is IIntentValidator {
+    error InvalidConfiguration();
+    error InvalidPayment();
+
+    address public immutable recipient;
+    uint256 public immutable maxAmount;
+
+    constructor(address recipient_, uint256 maxAmount_) {
+        if (recipient_ == address(0) || maxAmount_ == 0) revert InvalidConfiguration();
+        recipient = recipient_;
+        maxAmount = maxAmount_;
+    }
+
+    function validate(
+        address target,
+        bytes4 selector,
+        bytes calldata data,
+        uint256 value,
+        bytes32
+    ) external view returns (uint256 chargedValue) {
+        if (target != recipient || selector != bytes4(0) || data.length != 0 || value == 0 || value > maxAmount) {
+            revert InvalidPayment();
+        }
+        return value;
     }
 }
 

@@ -1,0 +1,7 @@
+{
+  "protocolVersion": "0.3.0",
+  "name": "AIRLOCK Release Authority",
+  "capabilities": { "streaming": false, "pushNotifications": false },
+  "skills": ["airlock.authorize"],
+  "authorization": "AIRLOCK_CREDENTIAL_V1"
+}

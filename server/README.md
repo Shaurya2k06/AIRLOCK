@@ -1,10 +1,9 @@
 # AIRLOCK local API
 
-The server serves a labelled local fixture when no deployment/RPC is
-configured. With `deployments.json` and `CREDITCOIN_RPC_URL`, it reads evidence
-and capability state from Creditcoin and returns `dataSource: creditcoin-chain`.
-RPC failures are returned as `dataSource: rpc-error`; the client must not treat
-that state as a fixture or authorization decision.
+The server is chain-backed only. With `deployments.json` and
+`CREDITCOIN_RPC_URL`, it reads evidence and capability state from Creditcoin.
+Missing configuration or RPC failures are returned as non-healthy states; the
+client must not treat them as authorization decisions.
 
 The server needs no private key. Copy `.env.example` to `.env` and set
 `CREDITCOIN_RPC_URL`; `AIRLOCK_DEPLOYMENTS` is optional and defaults to
@@ -32,4 +31,17 @@ Endpoints:
 - `GET /api/overview`
 - `GET /api/runbook`
 - `POST /api/runbook/execute` with `{ "step": "preflight" }`
-- `POST /api/actions/simulate` with `{ "recipient": "0x4E…91c2", "amount": 24 }`
+- `GET /api/protocol`
+- `GET /api/trace`
+- `GET /api/runtime-assurance`
+- `POST /api/credentials/issue` (operator-authenticated, active live capability required)
+- `POST /api/credentials/delegate` (operator-authenticated, on-chain parent/child registration)
+- `POST /api/evaluations/quorum`
+- `GET /api/identity`
+- `POST /mcp` (JSON-RPC `initialize`, `tools/list`, `tools/call`, `ping`)
+- `POST /a2a` and `GET /.well-known/agent-card.json`
+- `GET|POST /x402/protected`
+
+Protocol details, credential fields, and configuration gates are in
+[`../docs/protocol.md`](../docs/protocol.md). Hosted client action buttons use
+the live runbook and router path.

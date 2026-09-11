@@ -17,10 +17,12 @@ import {
     MockBlockProver,
     MockReceiptDecoder,
     MockStablecoin,
+    NativePaymentValidator,
     OfficialReceiptDecoder,
     PolicyRegistry,
     ReleaseStatusRegistry,
     RuntimeBindingRegistry,
+    CapabilityDelegationRegistry,
     RoleAddress,
     ToolRouter,
     AllowlistedStablecoinPaymentValidator
@@ -87,11 +89,13 @@ contract AirlockTest is Test {
     PolicyRegistry private policies;
     RuntimeBindingRegistry private runtimeBindings;
     CapabilityIssuer private issuer;
+    CapabilityDelegationRegistry private delegation;
     ToolRouter private router;
     AgentVault private vault;
     MockStablecoin private stablecoin;
     BoundedDepositProtocol private protocol;
     AllowlistedStablecoinPaymentValidator private paymentValidator;
+    NativePaymentValidator private nativePaymentValidator;
     BoundedDepositValidator private depositValidator;
 
     address private runtimeKey;
@@ -131,12 +135,17 @@ contract AirlockTest is Test {
         policies = new PolicyRegistry(admin, guardian);
         runtimeBindings = new RuntimeBindingRegistry(teeVerifier);
         issuer = new CapabilityIssuer(admin, guardian, address(evidence), address(policies), address(runtimeBindings));
+        delegation = new CapabilityDelegationRegistry(admin, guardian, address(issuer));
         vault = new AgentVault(admin);
-        router = new ToolRouter(admin, address(issuer), address(vault));
+        router = new ToolRouter(admin, address(issuer), address(vault), address(delegation));
         vm.prank(admin);
         vault.setRouter(address(router));
         vm.prank(admin);
         issuer.setRouter(address(router));
+        vm.prank(admin);
+        issuer.setDelegationRegistry(address(delegation));
+        vm.prank(admin);
+        delegation.setRouter(address(router));
 
         stablecoin = new MockStablecoin();
         protocol = new BoundedDepositProtocol();
@@ -146,6 +155,7 @@ contract AirlockTest is Test {
             0.25 ether,
             MockStablecoin.transfer.selector
         );
+        nativePaymentValidator = new NativePaymentValidator(vendorRecipient, 0.25 ether);
         depositValidator = new BoundedDepositValidator(
             address(protocol),
             depositPosition,
@@ -225,6 +235,29 @@ contract AirlockTest is Test {
         _importEvidence(futureDigest, futureReleaseId, futureReleaseId, uint64(block.timestamp + 1));
         vm.expectRevert(CapabilityIssuer.InvalidWindow.selector);
         issuer.issue(orgId, agentId, futureDigest, policyHash);
+    }
+
+    function test_DelegationIsAttenuatedAndParentRevocationCascades() public {
+        bytes32 childId = keccak256("child-capability");
+        vm.prank(admin);
+        delegation.register(
+            childId,
+            capabilityId,
+            keccak256("child-agent"),
+            scopeRoot,
+            address(0xCAFE),
+            0.1 ether,
+            1,
+            uint64(block.timestamp),
+            uint64(block.timestamp + 300),
+            1,
+            keccak256("a2a-task")
+        );
+        assertTrue(delegation.isActive(childId));
+
+        vm.prank(guardian);
+        issuer.revoke(capabilityId);
+        assertFalse(delegation.isActive(childId));
     }
 
     function test_AdapterRejectsMalformedReceiptsBeforeEvidenceMutation() public {
@@ -850,6 +883,19 @@ contract AirlockTest is Test {
 
         vm.expectRevert(BoundedDepositValidator.InvalidConfiguration.selector);
         new BoundedDepositValidator(address(protocol), bytes32(0), 1, BoundedDepositProtocol.deposit.selector);
+
+        vm.expectRevert(NativePaymentValidator.InvalidConfiguration.selector);
+        new NativePaymentValidator(address(0), 1);
+    }
+
+    function test_NativePaymentValidatorChargesNativeValueOnly() public {
+        assertEq(nativePaymentValidator.validate(vendorRecipient, bytes4(0), bytes(""), 0.2 ether, bytes32(0)), 0.2 ether);
+
+        vm.expectRevert(NativePaymentValidator.InvalidPayment.selector);
+        nativePaymentValidator.validate(vendorRecipient, bytes4(0), bytes("0x01"), 0.2 ether, bytes32(0));
+
+        vm.expectRevert(NativePaymentValidator.InvalidPayment.selector);
+        nativePaymentValidator.validate(address(0xBAD), bytes4(0), bytes(""), 0.2 ether, bytes32(0));
     }
 
     function _importAllEvidence() internal {
@@ -1047,6 +1093,7 @@ contract AirlockTest is Test {
             deadline: uint64(block.timestamp + 60),
             actionNonce: actionNonce,
             idempotencyKey: idempotencyKey,
+            traceRoot: keccak256(abi.encode("AIRLOCK_TRACE_V1", idempotencyKey)),
             scopeLeaf: leaf,
             scopeProof: proof,
             data: data

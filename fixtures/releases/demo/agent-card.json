@@ -1,0 +1,11 @@
+{
+  "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
+  "name": "AIRLOCK release-bound agent",
+  "description": "An agent release that exposes only policy-authorized tools through AIRLOCK.",
+  "services": [
+    { "name": "mcp", "endpoint": "configured-at-deploy" },
+    { "name": "a2a", "endpoint": "configured-at-deploy" }
+  ],
+  "supportedTrust": ["crypto-economic", "tee-attestation"],
+  "metadata": { "releaseDigest": "derived-from-this-manifest" }
+}

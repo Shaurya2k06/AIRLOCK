@@ -126,7 +126,7 @@ async function main() {
     if (paymentAmount <= 0n) throw new Error("PAYMENT_AMOUNT must be greater than zero");
     const depositTarget = bytes32(process.env.DEPOSIT_TARGET?.trim() || "airlock-demo-position", "DEPOSIT_TARGET");
     const releaseDirectory = resolve(process.cwd(), process.env.RELEASE_DIR?.trim() || "../fixtures/releases/demo");
-    const paymentSelector = selector("transfer(address,uint256)");
+    const paymentSelector = "0x00000000";
     const depositSelector = selector("deposit(bytes32)");
     const paymentConstraints = id("AIRLOCK_PAYMENT_V1");
     const depositConstraints = id("AIRLOCK_DEPOSIT_V1");
@@ -140,15 +140,12 @@ async function main() {
     const approvalRegistry = await deploy("DeploymentApprovalRegistry", sourceDeployer, await approver.getAddress());
     const statusRegistry = await deploy("ReleaseStatusRegistry", sourceDeployer, await statusAuthority.getAddress());
 
-    const paymentToken = await deploy("MockStablecoin", creditcoinDeployer);
     const protocol = await deploy("BoundedDepositProtocol", creditcoinDeployer);
     const paymentValidator = await deploy(
-        "AllowlistedStablecoinPaymentValidator",
+        "NativePaymentValidator",
         creditcoinDeployer,
-        await paymentToken.getAddress(),
         recipient,
         paymentAmount,
-        paymentSelector,
     );
     const depositValidator = await deploy(
         "BoundedDepositValidator",
@@ -158,7 +155,7 @@ async function main() {
         parseEther("0.1"),
         depositSelector,
     );
-    const paymentLeaf = scopeLeaf(await paymentToken.getAddress(), paymentSelector, await paymentValidator.getAddress(), paymentConstraints);
+    const paymentLeaf = scopeLeaf(recipient, paymentSelector, await paymentValidator.getAddress(), paymentConstraints);
     const depositLeaf = scopeLeaf(await protocol.getAddress(), depositSelector, await depositValidator.getAddress(), depositConstraints);
     const scopeRoot = pair(paymentLeaf, depositLeaf);
     const manifest = await buildManifest({
@@ -215,8 +212,15 @@ async function main() {
         await policies.getAddress(),
         await runtimeBindings.getAddress(),
     );
+    const delegationRegistry = await deploy(
+        "CapabilityDelegationRegistry",
+        creditcoinDeployer,
+        await policyAdmin.getAddress(),
+        await guardian.getAddress(),
+        await issuer.getAddress(),
+    );
     const vault = await deploy("AgentVault", creditcoinDeployer, await policyAdmin.getAddress());
-    const router = await deploy("ToolRouter", creditcoinDeployer, await policyAdmin.getAddress(), await issuer.getAddress(), await vault.getAddress());
+    const router = await deploy("ToolRouter", creditcoinDeployer, await policyAdmin.getAddress(), await issuer.getAddress(), await vault.getAddress(), await delegationRegistry.getAddress());
     const adapter = await deploy(
         "AirlockAttestcoinAdapter",
         creditcoinDeployer,
@@ -235,13 +239,14 @@ async function main() {
     await send(evidence.connect(policyAdmin), "setAdapter", await adapter.getAddress());
     await send(vault.connect(policyAdmin), "setRouter", await router.getAddress());
     await send(issuer.connect(policyAdmin), "setRouter", await router.getAddress());
-    await send(router.connect(policyAdmin), "registerAction", await paymentToken.getAddress(), paymentSelector, await paymentValidator.getAddress(), paymentConstraints);
+    await send(issuer.connect(policyAdmin), "setDelegationRegistry", await delegationRegistry.getAddress());
+    await send(delegationRegistry.connect(policyAdmin), "setRouter", await router.getAddress());
+    await send(router.connect(policyAdmin), "registerAction", recipient, paymentSelector, await paymentValidator.getAddress(), paymentConstraints);
     await send(router.connect(policyAdmin), "registerAction", await protocol.getAddress(), depositSelector, await depositValidator.getAddress(), depositConstraints);
     await send(policies.connect(policyAdmin), "register", policyInput);
-    await send(paymentToken, "mint", await vault.getAddress(), spendCeiling);
     const fundingTransaction = await creditcoinDeployer.sendTransaction({
         to: await vault.getAddress(),
-        value: depositAmount,
+        value: spendCeiling,
     });
     await fundingTransaction.wait();
 
@@ -333,9 +338,10 @@ async function main() {
             policies: await policies.getAddress(),
             runtimeBindings: await runtimeBindings.getAddress(),
             issuer: await issuer.getAddress(),
+            delegationRegistry: await delegationRegistry.getAddress(),
             vault: await vault.getAddress(),
             router: await router.getAddress(),
-            paymentToken: await paymentToken.getAddress(),
+            paymentRecipient: recipient,
             protocol: await protocol.getAddress(),
             paymentValidator: await paymentValidator.getAddress(),
             depositValidator: await depositValidator.getAddress(),
@@ -349,6 +355,8 @@ async function main() {
             releaseVersion: manifest.payload.releaseVersion,
             manifestHash,
             artifactRoot,
+            passportHash: manifest.payload.passport?.passportHash || null,
+            runtimeAssurance: manifest.payload.passport?.runtimeAssurance || "L0",
             containerImageDigest,
             policyHash,
             scopeRoot,
