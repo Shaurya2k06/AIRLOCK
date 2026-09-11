@@ -62,7 +62,7 @@ type Overview = {
 
 type DisplayEvidence = { label: string; detail: string; time?: string; status: string; icon: IconName; txHash?: string; creditcoinTxHash?: string; sourceChainKey?: number; sourceEmitter?: string; sourceTopic0?: string; sourceBlock?: number; logIndex?: number; receiptStatus?: number }
 type RunbookStep = { id: string; label: string; command: string; kind: string; status: string; canRun: boolean; requiresWrite: boolean }
-type Runbook = { mode: string; writesEnabled: boolean; steps: RunbookStep[] }
+type Runbook = { mode: string; writesEnabled: boolean; writeAuthRequired?: boolean; steps: RunbookStep[] }
 const API_URL = (import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8787').replace(/\/$/, '')
 
 const architectureNodes: Node[] = [
@@ -92,6 +92,7 @@ function DemoPage({ onHome }: { onHome: () => void }) {
   const [runbook, setRunbook] = useState<Runbook | null>(null)
   const [runbookRunning, setRunbookRunning] = useState('')
   const [runbookMessage, setRunbookMessage] = useState('')
+  const [writeToken, setWriteToken] = useState('')
   const [loadError, setLoadError] = useState(false)
 
   useEffect(() => {
@@ -123,48 +124,53 @@ function DemoPage({ onHome }: { onHome: () => void }) {
     return null
   }, [simulation, simulationReason])
 
-  const simulate = async (blocked: boolean) => {
-    if (!displayOverview) {
-      setSimulation('blocked')
-      setSimulationReason('chain data unavailable; no action was submitted')
-      return
+  const executeRunbook = async (step: RunbookStep): Promise<{ ok: boolean; message: string; runbook?: Runbook }> => {
+    if (step.requiresWrite && !window.confirm(`Run ${step.label}? This may send a real testnet transaction.`)) return { ok: false, message: 'action cancelled' }
+    const operatorToken = step.requiresWrite && runbook?.writeAuthRequired && !writeToken
+      ? window.prompt('Enter the AIRLOCK operator token')?.trim() || ''
+      : writeToken
+    if (step.requiresWrite && runbook?.writeAuthRequired && !operatorToken) {
+      const message = 'operator token required; no action was submitted'
+      setRunbookMessage(message)
+      return { ok: false, message }
     }
-    const recipient = blocked ? '0x0000000000000000000000000000000000000001' : displayOverview.policy.recipient
-    const amount = blocked ? 24 : Math.min(24, displayOverview.policy.maxPayment)
-    try {
-      const response = await fetch(`${API_URL}/api/actions/simulate`, {
-        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ recipient, amount }),
-      })
-      if (!response.ok) throw new Error('control plane unavailable; no chain decision available')
-      const result = await response.json()
-      setSimulation(result.allowed ? 'allowed' : 'blocked')
-      setSimulationReason(result.reason)
-    } catch {
-      setSimulation('blocked')
-      setSimulationReason('control plane unavailable; no chain decision available')
-    }
-  }
-
-  const executeRunbook = async (step: RunbookStep) => {
-    if (step.requiresWrite && !window.confirm(`Run ${step.label}? This may send a real testnet transaction.`)) return
+    if (operatorToken && operatorToken !== writeToken) setWriteToken(operatorToken)
     setRunbookRunning(step.id)
     setRunbookMessage('')
     try {
+      const headers: Record<string, string> = { 'content-type': 'application/json' }
+      if (operatorToken) headers.authorization = `Bearer ${operatorToken}`
       const response = await fetch(`${API_URL}/api/runbook/execute`, {
-        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ step: step.id }),
+        method: 'POST', headers, body: JSON.stringify({ step: step.id }),
       })
       const result = await response.json() as { ok?: boolean; output?: string; error?: string; runbook?: Runbook }
       if (result.runbook) setRunbook(result.runbook)
-      setRunbookMessage(result.output || result.error || (result.ok ? 'step complete' : 'step failed'))
+      const message = result.output || result.error || (result.ok ? 'step complete' : 'step failed')
+      setRunbookMessage(message)
       if (result.ok) {
         const refreshed = await fetch(`${API_URL}/api/overview`)
         if (refreshed.ok) setOverview(await refreshed.json() as Overview)
       }
+      return { ok: Boolean(result.ok && response.ok), message, runbook: result.runbook }
     } catch {
-      setRunbookMessage('control plane unavailable; no terminal action was started')
+      const message = 'control plane unavailable; no terminal action was started'
+      setRunbookMessage(message)
+      return { ok: false, message }
     } finally {
       setRunbookRunning('')
     }
+  }
+
+  const runActualAction = async (stepId: 'execute' | 'blocked') => {
+    const step = runbook?.steps.find((item) => item.id === stepId)
+    if (!step) {
+      setSimulation('blocked')
+      setSimulationReason('live runbook unavailable; no action was submitted')
+      return
+    }
+    const result = await executeRunbook(step)
+    setSimulation(stepId === 'blocked' ? 'blocked' : result.ok ? 'allowed' : 'blocked')
+    setSimulationReason(stepId === 'blocked' && result.ok ? 'post-revocation router rejection confirmed on-chain' : result.message)
   }
 
   return (
@@ -209,7 +215,7 @@ function DemoPage({ onHome }: { onHome: () => void }) {
 
           <section className="panel evidence-panel"><div className="panel-header evidence-heading"><div><div className="panel-kicker">EVIDENCE GRAPH</div><h2>Four independent proofs. One release.</h2></div><button className="text-button" onClick={() => setActiveNav('Evidence graph')}>Open inspector <Icon name="arrow" size={14} /></button></div><div className="evidence-track">{displayEvidence.map((item, index) => <div className="evidence-item" key={item.label}><div className="evidence-node"><Icon name={item.icon} size={18} /><span className="node-check"><Icon name="check" size={10} /></span></div><div className="evidence-copy"><strong>{item.label}</strong><span>{item.detail}</span><small>{item.time ?? 'chain'} · <b>{item.status}</b></small></div>{index < displayEvidence.length - 1 && <div className="evidence-connector"><span /></div>}</div>)}</div><div className="evidence-footer"><span><span className="status-dot" /> {liveData ? 'All proofs read from Creditcoin for ' : 'Chain data unavailable for '}<code>{release.digest}</code></span><span>source chain key <b>{liveData ? network.chainKey : '—'}</b></span></div></section>
 
-          <section className="bottom-grid"><div className="panel action-panel"><div className="panel-header"><div><div className="panel-kicker">ACTION GATE</div><h2>Test the boundary</h2></div><span className="action-state"><span className="status-dot" /> {liveData ? 'signer ready' : 'unavailable'}</span></div><p className="panel-description">The model proposes. AIRLOCK validates the exact intent before the vault can move value.</p><div className="intent-preview"><div className="intent-line"><span>tool</span><code>vendor.pay</code><span className="intent-allow">ALLOWLISTED</span></div><div className="intent-line"><span>recipient</span><code>{displayOverview?.policy.recipient ?? '—'}</code><span>{displayOverview ? `≤ $${displayOverview.policy.maxPayment.toFixed(2)}` : '—'}</span></div><div className="intent-line"><span>nonce</span><code>01</code><span>deadline 60s</span></div></div><div className="action-buttons"><button className="primary-button" disabled={!displayOverview} onClick={() => simulate(false)}><Icon name="play" size={15} /> Simulate allowed call</button><button className="danger-button" disabled={!displayOverview} onClick={() => simulate(true)}><Icon name="shield" size={15} /> Test blocked call</button></div>{simulationCopy && <div className={`simulation-result ${simulationCopy.tone}`}><span className="result-icon"><Icon name={simulationCopy.tone === 'success' ? 'check' : 'shield'} size={15} /></span><div><strong>{simulationCopy.title}</strong><span>{simulationCopy.body}</span></div><button onClick={() => { setSimulation('idle'); setSimulationReason('') }} aria-label="Dismiss result">×</button></div>}</div>
+          <section className="bottom-grid"><div className="panel action-panel"><div className="panel-header"><div><div className="panel-kicker">ACTION GATE</div><h2>Execute through the boundary</h2></div><span className="action-state"><span className="status-dot" /> {liveData && runbook?.writesEnabled ? 'signer ready' : liveData ? 'writes disabled' : 'unavailable'}</span></div><p className="panel-description">The model proposes. AIRLOCK validates the exact intent before the vault can move value.</p><div className="intent-preview"><div className="intent-line"><span>tool</span><code>vendor.pay</code><span className="intent-allow">ALLOWLISTED</span></div><div className="intent-line"><span>recipient</span><code>{displayOverview?.policy.recipient ?? '—'}</code><span>{displayOverview ? `≤ $${displayOverview.policy.maxPayment.toFixed(2)}` : '—'}</span></div><div className="intent-line"><span>nonce</span><code>01</code><span>deadline 60s</span></div></div><div className="action-buttons"><button className="primary-button" disabled={!displayOverview || !runbook?.writesEnabled || runbookRunning !== ''} onClick={() => runActualAction('execute')}><Icon name="play" size={15} /> Run allowed call</button><button className="danger-button" disabled={!displayOverview || !runbook?.writesEnabled || runbookRunning !== ''} onClick={() => runActualAction('blocked')}><Icon name="shield" size={15} /> Run blocked check</button></div>{simulationCopy && <div className={`simulation-result ${simulationCopy.tone}`}><span className="result-icon"><Icon name={simulationCopy.tone === 'success' ? 'check' : 'shield'} size={15} /></span><div><strong>{simulationCopy.title}</strong><span>{simulationCopy.body}</span></div><button onClick={() => { setSimulation('idle'); setSimulationReason('') }} aria-label="Dismiss result">×</button></div>}</div>
             <div className="panel activity-panel"><div className="panel-header"><div><div className="panel-kicker">RECENT ACTIVITY</div><h2>Enforcement log</h2></div><button className="text-button" onClick={() => setActiveNav('Action log')}>View all <Icon name="arrow" size={14} /></button></div><div className="activity-table"><div className="table-head"><span>Action</span><span>Value</span><span>Result</span></div>{displayActivity.map((row) => <div className="table-row" key={`${row.action}-${row.age}`}><div><strong>{row.action}</strong><small>{row.target} · {row.age}</small></div><span>{row.amount}</span><b className={row.state === 'Allowed' ? 'allowed' : 'blocked'}><span />{row.state}</b></div>)}</div></div></section>
         </div>}
 

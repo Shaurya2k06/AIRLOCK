@@ -49,9 +49,10 @@ action; `LIVE_STEP=revoke`, a revocation proof import, and
 
 The dashboard uses only `CREDITCOIN_RPC_URL` and the generated
 `deployments.json` for live reads; the Vite client optionally uses
-`VITE_API_URL` (default `http://127.0.0.1:8787`). The `/demo` runbook can
-surface the terminal workflow and, only with `AIRLOCK_ENABLE_WRITES=true` on a
-loopback-bound server, run its allowlisted commands. Public live addresses,
+`VITE_API_URL` (default `http://127.0.0.1:8787`). The `/demo` runbook surfaces
+the terminal workflow and can run its allowlisted testnet commands when the
+server has `AIRLOCK_ENABLE_WRITES=true` and, for hosted deployments,
+`AIRLOCK_WRITE_TOKEN`. Public live addresses,
 receipts, proof metrics, and enforcement results are recorded in [`docs/evidence.md`](docs/evidence.md) and
 [`docs/deployment-manifest.json`](docs/deployment-manifest.json). A second
 clean-clone live rehearsal is recorded in [`docs/rehearsal.md`](docs/rehearsal.md).

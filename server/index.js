@@ -180,7 +180,9 @@ async function overview() {
 function runbook(deployment) {
   const proofs = deployment?.proofs || {}
   const live = deployment?.live || {}
+  const writeAuthRequired = !localHosts.has(host)
   const writesEnabled = process.env.AIRLOCK_ENABLE_WRITES === 'true'
+    && (!writeAuthRequired || Boolean(process.env.AIRLOCK_WRITE_TOKEN?.trim()))
   const complete = (value) => Boolean(value)
   const steps = [
     { id: 'preflight', label: 'Preflight checks', command: 'npm run live:check', kind: 'read-only', status: 'READY', canRun: true },
@@ -205,8 +207,16 @@ function runbook(deployment) {
   return {
     mode: deployment && process.env.CREDITCOIN_RPC_URL ? 'live' : 'fixture',
     writesEnabled,
+    writeAuthRequired: writesEnabled && writeAuthRequired,
     steps: steps.map(({ env, ...step }) => ({ ...step, requiresWrite: step.kind === 'write' })),
   }
+}
+
+function writeAuthorized(request) {
+  if (localHosts.has(host)) return true
+  const configuredToken = process.env.AIRLOCK_WRITE_TOKEN?.trim()
+  const authorization = request.headers.authorization || ''
+  return Boolean(configuredToken && authorization === `Bearer ${configuredToken}`)
 }
 
 const runbookCommands = new Map([
@@ -301,7 +311,7 @@ function simulate(intent, policy = fixtureState.policy, current = fixtureState) 
 const server = http.createServer(async (request, response) => {
   const url = new URL(request.url || '/', `http://${request.headers.host || `${host}:${port}`}`)
   if (request.method === 'OPTIONS') {
-    response.writeHead(204, { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET,POST,OPTIONS', 'access-control-allow-headers': 'content-type' })
+    response.writeHead(204, { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET,POST,OPTIONS', 'access-control-allow-headers': 'content-type,authorization' })
     response.end()
     return
   }
@@ -340,8 +350,8 @@ const server = http.createServer(async (request, response) => {
       if (selected.requiresWrite && process.env.AIRLOCK_ENABLE_WRITES !== 'true') {
         return json(response, 403, { ok: false, error: 'write actions are disabled; set AIRLOCK_ENABLE_WRITES=true on the server' })
       }
-      if (selected.requiresWrite && !localHosts.has(host)) {
-        return json(response, 403, { ok: false, error: 'write actions require a loopback-bound server' })
+      if (selected.requiresWrite && !writeAuthorized(request)) {
+        return json(response, process.env.AIRLOCK_WRITE_TOKEN ? 401 : 503, { ok: false, error: process.env.AIRLOCK_WRITE_TOKEN ? 'operator authorization required' : 'remote writes require AIRLOCK_WRITE_TOKEN on the server' })
       }
       if (selected.requiresWrite && request.headers.origin && !writeOrigins.has(request.headers.origin)) {
         return json(response, 403, { ok: false, error: 'write origin is not allowed; set AIRLOCK_CLIENT_ORIGIN on the server' })
