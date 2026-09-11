@@ -9,3 +9,6 @@ npm install
 npm run build
 npm run lint
 ```
+
+Set `VITE_API_URL` when the API is not at `http://127.0.0.1:8787`. The client
+has no wallet, RPC, or private-key configuration.

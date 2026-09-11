@@ -39,6 +39,12 @@ After the four imports, `LIVE_STEP=execute npm run live-step` runs the allowed
 action; `LIVE_STEP=revoke`, a revocation proof import, and
 `LIVE_STEP=blocked` complete the negative path.
 
+The read-only dashboard uses only `CREDITCOIN_RPC_URL` and the generated
+`deployments.json`; the Vite client optionally uses `VITE_API_URL` (default
+`http://127.0.0.1:8787`). Public live addresses, receipts, proof metrics, and
+enforcement results are recorded in [`docs/evidence.md`](docs/evidence.md) and
+[`docs/deployment-manifest.json`](docs/deployment-manifest.json).
+
 ## Live run inputs
 
 Copy `contracts/.env.example` to `contracts/.env` only when running the real
@@ -63,8 +69,8 @@ not configuration inputs.
   loop.
 - `server/index.js` — fixture/live read-only control-plane API.
 - `client/src/App.tsx` — evidence, capability, and enforcement console.
-- `docs/` — architecture, Attestcoin integration, threat model, evidence
-  template, and live demo runbook.
+- `docs/` — architecture, Attestcoin integration, threat model, live evidence,
+  deployment manifest, and demo runbook.
 
 The base-mode claim is deliberately narrow: the capability binds a release
 digest to a runtime key; it does not prove that a running process loaded those

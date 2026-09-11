@@ -30,6 +30,9 @@ export default defineConfig({
       },
     },
   },
+  verify: {
+    etherscan: { apiKey: configVariable("ETHERSCAN_API_KEY") },
+  },
   networks: {
     hardhatMainnet: {
       type: "edr-simulated",
@@ -44,6 +47,12 @@ export default defineConfig({
       chainType: "l1",
       url: configVariable("SEPOLIA_RPC_URL"),
       accounts: [configVariable("SEPOLIA_PRIVATE_KEY")],
+    },
+    creditcoin: {
+      type: "http",
+      chainType: "l1",
+      url: configVariable("CREDITCOIN_RPC_URL"),
+      accounts: [configVariable("CREDITCOIN_DEPLOYER_PRIVATE_KEY")],
     },
   },
 });
