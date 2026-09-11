@@ -11,6 +11,7 @@ const deploymentsFile = process.env.AIRLOCK_DEPLOYMENTS || path.join(__dirname, 
 const contractsDir = path.join(__dirname, '..', 'contracts')
 const commandTimeoutMs = Number(process.env.AIRLOCK_COMMAND_TIMEOUT_MS || 15 * 60 * 1000)
 const localHosts = new Set(['127.0.0.1', 'localhost', '::1'])
+const writeOrigins = new Set((process.env.AIRLOCK_CLIENT_ORIGIN || 'http://127.0.0.1:5173,http://localhost:5173').split(',').map((value) => value.trim()).filter(Boolean))
 let activeRunbookJob = false
 
 const fixtureState = {
@@ -318,6 +319,9 @@ const server = http.createServer(async (request, response) => {
       }
       if (selected.requiresWrite && !localHosts.has(host)) {
         return json(response, 403, { ok: false, error: 'write actions require a loopback-bound server' })
+      }
+      if (selected.requiresWrite && request.headers.origin && !writeOrigins.has(request.headers.origin)) {
+        return json(response, 403, { ok: false, error: 'write origin is not allowed; set AIRLOCK_CLIENT_ORIGIN on the server' })
       }
       if (activeRunbookJob) return json(response, 409, { ok: false, error: 'another runbook action is already running' })
       activeRunbookJob = true

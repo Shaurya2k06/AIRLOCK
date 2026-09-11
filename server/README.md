@@ -20,7 +20,9 @@ run only its allowlisted steps, and write steps are disabled by default; set
 `AIRLOCK_ENABLE_WRITES=true` on the server to enable them. The browser still
 never sees `contracts/.env`. `AIRLOCK_COMMAND_TIMEOUT_MS` optionally bounds a
 command; the default is 15 minutes. Write steps also require the server to be
-bound to loopback (`HOST=127.0.0.1`, the default).
+bound to loopback (`HOST=127.0.0.1`, the default) and an allowed browser
+origin. `AIRLOCK_CLIENT_ORIGIN` overrides the default Vite origins
+(`http://127.0.0.1:5173,http://localhost:5173`).
 
 Endpoints:
 

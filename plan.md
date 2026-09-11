@@ -4,8 +4,13 @@
 
 Completed: the live Sepolia → Attestcoin → Creditcoin vertical slice, source
 and destination contract verification, a non-secret deployment evidence
-package, the read-only dashboard, and a second full rehearsal from a clean
-clone of the submission commit. Local CI and the pushed GitHub CI run are green.
+package, the chain-backed dashboard with an opt-in local terminal runbook, and
+a second full rehearsal from a clean clone of the submission commit. Local CI
+and the pushed GitHub CI run are green. The live server recheck confirms all
+four evidence classes and the post-revocation block on the current deployment.
+
+Batch imports and TEE binding remain post-MVP and intentionally have not
+started; the single-proof import and capability-containment gates are stable.
 
 Still external to this workspace: publishing the repository publicly and
 uploading a public demo video. Do not claim either as complete until the final

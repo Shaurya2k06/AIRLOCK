@@ -139,6 +139,7 @@ function DemoPage({ onHome }: { onHome: () => void }) {
   }
 
   const executeRunbook = async (step: RunbookStep) => {
+    if (step.requiresWrite && !window.confirm(`Run ${step.label}? This may send a real testnet transaction.`)) return
     setRunbookRunning(step.id)
     setRunbookMessage('')
     try {
