@@ -67,8 +67,18 @@ type Protocol = {
   a2a: { endpoint: string; agentCard: string }
   credential: { schema: string; audience: string; eip712: boolean; erc1271: boolean; attenuable: boolean }
   identity: { configured: boolean }
-  releasePassport: { manifest: string | null; artifactRoot: string | null }
+  releasePassport: { endpoint?: string; manifest: string | null; artifactRoot: string | null; passportHash?: string | null; verified?: boolean }
   runtimeAssurance: { level: string; name: string; verified: boolean; source: string; note?: string }
+}
+
+type ReleasePassport = {
+  verified: boolean
+  releaseDigest: string
+  manifestHash: string
+  artifactRoot: string
+  components: Record<string, string>
+  passport: Record<string, string>
+  fileCount: number
 }
 
 type DisplayEvidence = { label: string; detail: string; time?: string; status: string; icon: IconName; txHash?: string; creditcoinTxHash?: string; sourceChainKey?: number; sourceEmitter?: string; sourceTopic0?: string; sourceBlock?: number; logIndex?: number; receiptStatus?: number }
@@ -93,6 +103,10 @@ const architectureEdges: Edge[] = [
 
 function ArchitectureDiagram() {
   return <div className="architecture-flow"><ReactFlow nodes={architectureNodes} edges={architectureEdges} fitView fitViewOptions={{ padding: 0.2 }} nodesDraggable={false} nodesConnectable={false} panOnDrag zoomOnScroll={false} proOptions={{ hideAttribution: true }}><Background color="#243438" gap={24} size={1} /><Controls showInteractive={false} /></ReactFlow></div>
+}
+
+function shortHash(value?: string | null) {
+  return value && value.length > 14 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value || '—'
 }
 
 function DemoPage({ onHome }: { onHome: () => void }) {
@@ -329,12 +343,17 @@ function DetailView({ activeNav, onBack, evidenceItems, capability, activity: di
 
 function LandingPage({ onEnterDemo }: { onEnterDemo: () => void }) {
   const [landingOverview, setLandingOverview] = useState<Overview | null>(null)
+  const [landingPassport, setLandingPassport] = useState<ReleasePassport | null>(null)
 
   useEffect(() => {
     fetch(`${API_URL}/api/overview`)
       .then((response) => response.ok ? response.json() as Promise<Overview> : Promise.reject(new Error('chain unavailable')))
       .then((value) => { if (value.dataSource === 'creditcoin-chain') setLandingOverview(value) })
       .catch(() => setLandingOverview(null))
+    fetch(`${API_URL}/api/release-passport`)
+      .then((response) => response.ok ? response.json() as Promise<ReleasePassport> : Promise.reject(new Error('passport unavailable')))
+      .then(setLandingPassport)
+      .catch(() => setLandingPassport(null))
   }, [])
 
   const liveRelease = landingOverview?.dataSource === 'creditcoin-chain' ? landingOverview.release : null
@@ -363,7 +382,7 @@ function LandingPage({ onEnterDemo }: { onEnterDemo: () => void }) {
 
       <section className="product-section product-container" id="outcomes"><div className="section-intro section-intro-wide"><p className="product-kicker">WHAT AIRLOCK GIVES TEAMS</p><h2>Release-level authority with an explicit boundary.</h2></div><div className="outcome-grid"><div className="outcome-card"><span className="outcome-number">01</span><h3>Release-level authority</h3><p>Attach authority to one exact release commitment, not merely an agent address.</p><a href="#release-identity">See release identity <Icon name="arrow" size={13} /></a></div><div className="outcome-card"><span className="outcome-number">02</span><h3>Bounded autonomy</h3><p>Set targets, functions, recipients, spend, call counts, expiry, and freshness before the agent acts.</p><a href="#policy">Open policy studio <Icon name="arrow" size={13} /></a></div><div className="outcome-card"><span className="outcome-number">03</span><h3>Cross-chain evidence</h3><p>Verify source-chain facts on Creditcoin through Attestcoin proofs instead of trusting a centralized worker.</p><a href="#attestcoin">Trace the proof path <Icon name="arrow" size={13} /></a></div><div className="outcome-card"><span className="outcome-number">04</span><h3>Fast containment</h3><p>Proven revocation and local guardian pauses stop later actions even when a runtime still signs.</p><a href="#revocation">See containment <Icon name="arrow" size={13} /></a></div></div></section>
 
-      <section className="product-section product-container release-identity-section" id="release-identity"><div className="section-intro"><p className="product-kicker">RELEASE IDENTITY</p><h2>One byte changes the authority you can issue.</h2><p>The canonical manifest commits the model and the system around it: weights or adapters, tokenizer, prompts, tools, container, lockfile, SBOM, provenance, source revision, and evaluation suite.</p></div><div className="release-identity-grid"><div className="manifest-card"><div className="manifest-card-header"><span>CANONICAL MANIFEST</span><span>{liveRelease?.status ?? 'CHAIN-BACKED'}</span></div><div className="manifest-rows">{['Model weights / adapters', 'Tokenizer and prompts', 'Tool definitions', 'Container and lockfile', 'SBOM and build provenance', 'Source revision and evaluation'].map((row) => <div key={row}><span className="manifest-check"><Icon name="check" size={11} /></span><span>{row}</span><code>manifest input</code></div>)}</div><a className="digest-toggle" href="/demo" onClick={(event) => { event.preventDefault(); onEnterDemo() }}><span className="digest-toggle-dot" /> Inspect the live release passport <Icon name="arrow" size={13} /></a></div><div className="digest-visual"><div className="digest-visual-label">{liveRelease ? 'CHAIN RELEASE DIGEST' : 'LIVE RELEASE DIGEST'}</div><code>{liveDigest}</code><div className="digest-delta"><span>{liveRelease ? `${liveRelease.status.toLowerCase()} release state` : 'no chain state loaded on the landing page'}</span><b>{liveCapability?.status?.toLowerCase() ?? 'inspect demo'}</b></div><div className="digest-visual-footer"><span>releaseDigest</span><span>deterministic commitment</span></div></div></div></section>
+      <section className="product-section product-container release-identity-section" id="release-identity"><div className="section-intro"><p className="product-kicker">RELEASE IDENTITY</p><h2>One byte changes the authority you can issue.</h2><p>The canonical manifest commits the model and the system around it: weights or adapters, tokenizer, prompts, tools, container, lockfile, SBOM, provenance, source revision, and evaluation suite.</p></div><div className="release-identity-grid"><div className="manifest-card"><div className="manifest-card-header"><span>CANONICAL MANIFEST</span><span>{landingPassport?.verified ? 'VERIFIED' : liveRelease?.status ?? 'UNAVAILABLE'}</span></div><div className="manifest-rows">{[['Model weights / adapters', landingPassport?.components.weightsHash], ['Tokenizer', landingPassport?.components.tokenizerHash], ['Prompt bundle', landingPassport?.passport.promptTemplateHash], ['Tool / MCP schemas', landingPassport?.components.toolManifestRoot], ['Container image', landingPassport?.components.containerImageDigest], ['SBOM / provenance', landingPassport ? `${shortHash(landingPassport.components.sbomHash)} · ${shortHash(landingPassport.components.provenanceHash)}` : undefined]].map(([row, value]) => <div key={row}><span className="manifest-check"><Icon name="check" size={11} /></span><span>{row}</span><code>{shortHash(value)}</code></div>)}</div><a className="digest-toggle" href="/demo" onClick={(event) => { event.preventDefault(); onEnterDemo() }}><span className="digest-toggle-dot" /> Inspect the live release passport <Icon name="arrow" size={13} /></a></div><div className="digest-visual"><div className="digest-visual-label">{liveRelease ? 'CHAIN RELEASE DIGEST' : 'LIVE RELEASE DIGEST'}</div><code>{liveDigest}</code><div className="digest-delta"><span>{liveRelease ? `${liveRelease.status.toLowerCase()} release state` : 'no chain state loaded on the landing page'}</span><b>{liveCapability?.status?.toLowerCase() ?? 'inspect demo'}</b></div><div className="digest-visual-footer"><span>releaseDigest</span><span>{landingPassport?.verified ? `passport ${shortHash(landingPassport.passport.passportHash)}` : 'passport unavailable'}</span></div></div></div></section>
 
       <section className="product-section product-container lifecycle-section" id="lifecycle"><div className="section-intro section-intro-wide"><p className="product-kicker">HOW A RELEASE BECOMES AUTHORITY</p><h2>From manifest to bounded capability.</h2><p>Each stage creates evidence that the next stage can verify. The product does not skip from “model exists” to “wallet can spend.”</p></div><div className="lifecycle-grid">{[['01','Publish','Build the artifact manifest and publish the release commitment.'],['02','Evaluate','Certify the exact release with an approved evaluation suite.'],['03','Approve','Register deployment parameters and governance approval.'],['04','Activate','Mark the release active with a current validity window.'],['05','Prove','Verify source events through Attestcoin on Creditcoin.'],['06','Issue','Issue a bounded capability bound to the runtime key.'],['07','Act','Submit typed intents through the enforcement router.'],['08','Contain','Revoke or pause when the release or runtime is unsafe.']].map(([number,title,copy]) => <a className="lifecycle-step" href={number === '05' ? '#attestcoin' : number === '08' ? '#revocation' : number === '07' ? '#execution' : '#evidence'} key={number}><span>{number}</span><div><strong>{title}</strong><p>{copy}</p></div><Icon name="arrow" size={15} /></a>)}</div></section>
 

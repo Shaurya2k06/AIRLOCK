@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-11T12:03:49.620Z",
+  "generatedAt": "2026-09-11T12:53:16.620Z",
   "source": {
     "chainId": 11155111,
     "chainKey": 1,
@@ -10,16 +10,16 @@
       "approver": "0xa77C5c96A8c1c87c59f6D82adAf07adA543b0BCC",
       "statusAuthority": "0x3A4A6aC0cC3698d96fa0903F0f085E95E34B9A03"
     },
-    "artifactRegistry": "0xeAa8d11Fb488adf4cA473A9B970D4155A880C7BF",
-    "evaluationRegistry": "0x65F12edb1A6a479B2A6Ad3Bc40d44427aaCB8952",
-    "approvalRegistry": "0xE72e2fF706258DC1E5ef783d8FF9fA5f59A9c92e",
-    "statusRegistry": "0xf392ebcEE8f118696e69C0606C1267afA7816431",
+    "artifactRegistry": "0x5c4c21C28B4979543Ef4F6837CaBe3bac7Da8f2c",
+    "evaluationRegistry": "0x772f29dB1edC8591A678fd42056e0d151f2A676A",
+    "approvalRegistry": "0xF43511336aEfa31b09adf67c76b3D193ff9aEc3b",
+    "statusRegistry": "0xfbB020B564e41e33c0d7Ac8210cBA51C511aDc4C",
     "transactions": {
-      "artifactTx": "0x995187db6cb29adc14fe46ef764eaf1894c8e2e719028eb7b0e251254ad357ea",
-      "evaluationTx": "0xdf4d33b46c2aa0ada036068a8dc3349494c7bec40d031fa56c87e796cc53c1a2",
-      "approvalTx": "0x41145ad24c74e0c98c18b810ac185a7bef67adae87312d1569143d821704de5d",
-      "statusTx": "0x1568b177443aee31bd80ae9ac747477a0f559e8383305b126d358e3d81816834",
-      "revocationTx": "0xaa1142d78b7ca6c7c7b64e51dc380a39d05d074dd6d9df258b8323c08aad46f6"
+      "artifactTx": "0xfcf956bb0bef9200ee6cd442a74013be5553f1787dc3137cf0e44d059cf06992",
+      "evaluationTx": "0x1f3e89ec9de241616f605e78cdcb18d48a3ebaaf2be88294de6c769d408b643b",
+      "approvalTx": "0x10cd1799443b292550252559a8d7ff77506a99f36b301e69f77e4e19cb065c6f",
+      "statusTx": "0xdef7753e75004c15bc24d8c691b5b1540e2bd320486cca232a0d59fda393c621",
+      "revocationTx": "0xbe6a85d5e200b124ca3e30a84eece16b360d06603c6bf5ec45230b3435076d2b"
     }
   },
   "creditcoin": {
@@ -33,36 +33,36 @@
       "teeVerifier": "0xB6Bd887d89646D4A5a598dBDa7c2c97C2c43e8dB",
       "runtime": "0x28FD5AA616FC88DD22D606e182F36CE8d8bED974"
     },
-    "decoder": "0x35b106de527F7fC58fd1936CDd1b4069E0Da42b6",
-    "evidence": "0xCA36Cd4eb2f81eb6A76B8d3701aF17b5b43e5b23",
-    "adapter": "0x4Cc57B9e9945e7E24EBd9081a3978222bFCe9Eab",
-    "policies": "0x1B43F6B66f200A3cA7f08991fc5D4934A133A8cB",
-    "runtimeBindings": "0x347802C070007E0194169301318E4dCC5d8d646c",
-    "issuer": "0x0f79ab9573ae94544442D0D7DBD0B0eFd6E404d9",
-    "delegationRegistry": "0x3672d15Abb4b9C8b9e26b3ba060f69784fe38d7f",
-    "vault": "0xb58E4F9aa0e475a80B31bB2E5eE4D6aa824d448A",
-    "router": "0x3a217Ce7b91CB7E5d83063496E7b1bD75adEE419",
+    "decoder": "0x99F5E65C3F8FA7505eF02ACdFd76338dbCcf7fD5",
+    "evidence": "0xF8b3f71d07Da5F459A36Ad7f06FCAeC2bE432241",
+    "adapter": "0xd193E235c151B9e4a00f8Af01339C565Bb2912A4",
+    "policies": "0x2A3bC8A046CdBbe6969609393645B24eD8Eb1B1D",
+    "runtimeBindings": "0x794D0267886308028Bb6D1F53017D1e5339c98E1",
+    "issuer": "0x9E050E68f02eB7451E1e9788aa7E7Eb6A3F8ea75",
+    "delegationRegistry": "0x424A50e3CE39F0A55e15550abA79AE1e8176Ac04",
+    "vault": "0x5887e5344aa2F4793Bf645bc2096F31975b7bE04",
+    "router": "0x35311987798AaE87EF24cfF04c735960ef05dc11",
     "paymentRecipient": "0x4C3F5a84041E562928394d63b3E339bE70DBcC17",
-    "protocol": "0xA0e835903F8D517ab30410976FB2569e677714f5",
-    "paymentValidator": "0x4796bE3f0CAC55dCB558D95c6Bc6835040ee5aD5",
-    "depositValidator": "0xfAbCF676dAC109092494D156c63f803f6D2Cf901",
-    "vaultFundingTx": "0xc58411f3d11ed6045abaeeb2fbc4a1e1b6e940d87a102a54cc666fa56f99c864"
+    "protocol": "0x5CF8794F9179100ea20a5Afc93a93aefE29b05e7",
+    "paymentValidator": "0x5b1f225541Bb39Aa7b0420Ac226BE09e27114de4",
+    "depositValidator": "0x3Ba6287960E67A9c92edcc9429A3CC4EC9B07DA7",
+    "vaultFundingTx": "0x9ee53a1a71eab37544bc62609db0611da8a338ffcecb6275cc18447e9a19edb2"
   },
   "release": {
     "orgId": "0x19f14d9c15d90b47249d88d3fb11ada9dda7ba4d690fc48c533d1217ee726fa0",
     "releaseId": "0x8e0a115b6ca14dc079f590175807a4ef26d840174a4e5bdeaed593f888f6324b",
     "agentId": "0xc9bb4c9317790d917fe2da888cda19c1c96a65a7b8393ec0959bc352361d8c31",
-    "releaseDigest": "0xbea1ea89d965991de8970e53575e75b45b88520129f346c4243538965f4f5c86",
+    "releaseDigest": "0xf28519bf5af6dfa363808b6237ed09f699e77a25843f94eac054f75d7a7e76e6",
     "releaseVersion": 1,
-    "manifestHash": "0xa3202a9663c5a38ff7fcf9b71565f38fa97e9930796fda0d7c7cd68f489a913e",
+    "manifestHash": "0x470e90a58c22759c4cb24a5f83ce6ae8b640dbe4189cb6025329f23a3fee9fc9",
     "artifactRoot": "0xf9c2815cca7dfbb8a62851a696eae7486cdea2dc730785293ed0c0378fdf46cc",
     "passportHash": "0x69ac343e423a687ede3472cc43f4fbffdad4e5dd5e6c166bbbd024370d5b2477",
     "runtimeAssurance": "L0",
     "containerImageDigest": "0xa1a4b939835d1849a95407ef1bc45bad0d281ec39238cfce51d93facc668630e",
-    "policyHash": "0xb6f489c5a41ff7f01fdbaffb391a65707d7a2d57a76477d255786c98fb1f88f1",
-    "scopeRoot": "0xeabc549e01b8238a8e76771e3530023241c4e6bd9eee79f65a6c46124a9bc54e",
-    "paymentLeaf": "0xd69af6f9058b470f0017816846e63dd0e5f8047855f2666caf65a9b24a34f7a1",
-    "depositLeaf": "0x981d1a1505e31ec9274fb0bd48dd2e92a39f7b8494202545840343f2d35eaf59",
+    "policyHash": "0xcf5c99831cf82c302cd2ae1de5777c13de292a1c6c6c91eed1fef351013cb906",
+    "scopeRoot": "0x4adc2e3b83886dcc6ea560178767326c934c326c6d27656f5c87a071dade89bc",
+    "paymentLeaf": "0x9e0937b36da52490bfccb6f94eb4c2547555bc17cbc201550f0f51e1b23b4e9f",
+    "depositLeaf": "0xdfe591811ac22497b011d8bc4c8e0a43918b97780d8dc822c37a22471ea8af94",
     "runtimeKey": "0x28FD5AA616FC88DD22D606e182F36CE8d8bED974",
     "paymentRecipient": "0x4C3F5a84041E562928394d63b3E339bE70DBcC17",
     "paymentAmount": "10000000000000000",
@@ -70,115 +70,168 @@
     "depositAmount": "100000000000000000"
   },
   "proofs": {
+    "batch": {
+      "kinds": [
+        "artifact",
+        "evaluation",
+        "approval",
+        "status"
+      ],
+      "txHashes": [
+        "0xfcf956bb0bef9200ee6cd442a74013be5553f1787dc3137cf0e44d059cf06992",
+        "0x1f3e89ec9de241616f605e78cdcb18d48a3ebaaf2be88294de6c769d408b643b",
+        "0x10cd1799443b292550252559a8d7ff77506a99f36b301e69f77e4e19cb065c6f",
+        "0xdef7753e75004c15bc24d8c691b5b1540e2bd320486cca232a0d59fda393c621"
+      ],
+      "sourceChainKey": 1,
+      "sourceBlocks": [
+        11682036,
+        11682037,
+        11682039,
+        11682040
+      ],
+      "sourceTxIndices": [
+        101,
+        87,
+        77,
+        86
+      ],
+      "logIndices": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "receiptStatuses": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "proofBytes": [
+        2400,
+        2208,
+        2272,
+        1888
+      ],
+      "merkleSiblingCounts": [
+        8,
+        8,
+        8,
+        8
+      ],
+      "creditcoinTxHash": "0xaf057fe147c94dda596304570bbd66027cba7107cb56d7a7d6d657b6f72abf73",
+      "creditcoinGasUsed": "1323266",
+      "cachedProof": false
+    },
     "artifact": {
       "kind": "artifact",
-      "txHash": "0x995187db6cb29adc14fe46ef764eaf1894c8e2e719028eb7b0e251254ad357ea",
+      "txHash": "0xfcf956bb0bef9200ee6cd442a74013be5553f1787dc3137cf0e44d059cf06992",
       "sourceChainKey": 1,
-      "sourceBlock": 11681792,
-      "sourceTxIndex": 111,
+      "sourceBlock": 11682036,
+      "sourceTxIndex": 101,
       "logIndex": 0,
-      "sourceEmitter": "0xeAa8d11Fb488adf4cA473A9B970D4155A880C7BF",
-      "sourceTopic0": "0xf7a75d6b39bdebba2ce7d671952d12de7999a80a1b19410ef990a6f65f01fb26",
       "receiptStatus": 1,
       "proofBytes": 2400,
-      "merkleSiblingCount": 7,
-      "creditcoinTxHash": "0xc666a0cbff1f860fd3ff28b3e338641e0bcb41ffd033fe6e3779398d837f5123",
-      "creditcoinGasUsed": "472422",
-      "cachedProof": true
+      "merkleSiblingCount": 8,
+      "creditcoinTxHash": "0xaf057fe147c94dda596304570bbd66027cba7107cb56d7a7d6d657b6f72abf73",
+      "creditcoinGasUsed": "1323266",
+      "batchCreditcoinTxHash": "0xaf057fe147c94dda596304570bbd66027cba7107cb56d7a7d6d657b6f72abf73",
+      "cachedProof": false
     },
     "evaluation": {
       "kind": "evaluation",
-      "txHash": "0xdf4d33b46c2aa0ada036068a8dc3349494c7bec40d031fa56c87e796cc53c1a2",
+      "txHash": "0x1f3e89ec9de241616f605e78cdcb18d48a3ebaaf2be88294de6c769d408b643b",
       "sourceChainKey": 1,
-      "sourceBlock": 11681793,
-      "sourceTxIndex": 141,
+      "sourceBlock": 11682037,
+      "sourceTxIndex": 87,
       "logIndex": 0,
-      "sourceEmitter": "0x65F12edb1A6a479B2A6Ad3Bc40d44427aaCB8952",
-      "sourceTopic0": "0xd158796b70c6347151daaf6413cac32f6d7c3012ad4ba03a00f78a6544373282",
       "receiptStatus": 1,
       "proofBytes": 2208,
       "merkleSiblingCount": 8,
-      "creditcoinTxHash": "0xd1387294266071049f56c57bce8af895eeb3cef6bc00e49156390f92204ac8a7",
-      "creditcoinGasUsed": "386736",
-      "cachedProof": true
+      "creditcoinTxHash": "0xaf057fe147c94dda596304570bbd66027cba7107cb56d7a7d6d657b6f72abf73",
+      "creditcoinGasUsed": "1323266",
+      "batchCreditcoinTxHash": "0xaf057fe147c94dda596304570bbd66027cba7107cb56d7a7d6d657b6f72abf73",
+      "cachedProof": false
     },
     "approval": {
       "kind": "approval",
-      "txHash": "0x41145ad24c74e0c98c18b810ac185a7bef67adae87312d1569143d821704de5d",
+      "txHash": "0x10cd1799443b292550252559a8d7ff77506a99f36b301e69f77e4e19cb065c6f",
       "sourceChainKey": 1,
-      "sourceBlock": 11681794,
-      "sourceTxIndex": 94,
+      "sourceBlock": 11682039,
+      "sourceTxIndex": 77,
       "logIndex": 0,
-      "sourceEmitter": "0xE72e2fF706258DC1E5ef783d8FF9fA5f59A9c92e",
-      "sourceTopic0": "0xdd07ab43bccd3838df7f56549326c77486bddf7f44df88f36891a26ce9b46fa9",
       "receiptStatus": 1,
       "proofBytes": 2272,
       "merkleSiblingCount": 8,
-      "creditcoinTxHash": "0x90fa9d9ba211f16b4ac36424ebc5dc9ab84b73ed9d8bbc19d43bebd58b6038c4",
-      "creditcoinGasUsed": "385112",
-      "cachedProof": true
+      "creditcoinTxHash": "0xaf057fe147c94dda596304570bbd66027cba7107cb56d7a7d6d657b6f72abf73",
+      "creditcoinGasUsed": "1323266",
+      "batchCreditcoinTxHash": "0xaf057fe147c94dda596304570bbd66027cba7107cb56d7a7d6d657b6f72abf73",
+      "cachedProof": false
     },
     "status": {
       "kind": "status",
-      "txHash": "0x1568b177443aee31bd80ae9ac747477a0f559e8383305b126d358e3d81816834",
+      "txHash": "0xdef7753e75004c15bc24d8c691b5b1540e2bd320486cca232a0d59fda393c621",
       "sourceChainKey": 1,
-      "sourceBlock": 11681796,
-      "sourceTxIndex": 125,
+      "sourceBlock": 11682040,
+      "sourceTxIndex": 86,
       "logIndex": 0,
-      "sourceEmitter": "0xf392ebcEE8f118696e69C0606C1267afA7816431",
-      "sourceTopic0": "0x683b23e8cb64092e7aa42c46ca0f70c92f3fffa53f0f78a85339a5ee5af10b9f",
       "receiptStatus": 1,
       "proofBytes": 1888,
       "merkleSiblingCount": 8,
-      "creditcoinTxHash": "0xb3ee49e51ea38e2b14004c10193e407e6ad96dae11e28b6b386addba77c8287f",
-      "creditcoinGasUsed": "371000",
-      "cachedProof": true
+      "creditcoinTxHash": "0xaf057fe147c94dda596304570bbd66027cba7107cb56d7a7d6d657b6f72abf73",
+      "creditcoinGasUsed": "1323266",
+      "batchCreditcoinTxHash": "0xaf057fe147c94dda596304570bbd66027cba7107cb56d7a7d6d657b6f72abf73",
+      "cachedProof": false
     },
     "revocation": {
       "kind": "revocation",
-      "txHash": "0xaa1142d78b7ca6c7c7b64e51dc380a39d05d074dd6d9df258b8323c08aad46f6",
+      "txHash": "0xbe6a85d5e200b124ca3e30a84eece16b360d06603c6bf5ec45230b3435076d2b",
       "sourceChainKey": 1,
-      "sourceBlock": 11681853,
-      "sourceTxIndex": 146,
+      "sourceBlock": 11682099,
+      "sourceTxIndex": 84,
       "logIndex": 0,
-      "sourceEmitter": "0xf392ebcEE8f118696e69C0606C1267afA7816431",
+      "sourceEmitter": "0xfbB020B564e41e33c0d7Ac8210cBA51C511aDc4C",
       "sourceTopic0": "0xc3c8992a61b3d0d2bd05a0068bfa4554d89c6d2196aafadf297de401e621abd8",
       "receiptStatus": 1,
       "proofBytes": 1824,
       "merkleSiblingCount": 8,
-      "creditcoinTxHash": "0x0f5c090f5a3b7bc7c21da37471a26113c9eeefad4b45e370d8f06d4eac2f0ce9",
-      "creditcoinGasUsed": "371448",
+      "creditcoinTxHash": "0x57a6f5b5210f3aa73f22dbf194d5b8d347ec9ebeaf416066fe26bf4e6f0bc50f",
+      "creditcoinGasUsed": "368760",
       "cachedProof": true
     }
   },
   "live": {
-    "capabilityId": "0xb14e7b5f0d5c7ebd6275bebd8ecaf990af7f0722f5993622264ff4f9e8964196",
-    "rootCapabilityId": "0xb14e7b5f0d5c7ebd6275bebd8ecaf990af7f0722f5993622264ff4f9e8964196",
-    "issueTx": "0x42f7b24e12650531812e63f291183f4606769412ac81b275c07805c9cb5f8f4a",
+    "capabilityId": "0x642fcbc5ac0d0acb765681975a93a4450d590d55b72f4f84dae1a4dbba99f5cc",
+    "rootCapabilityId": "0x642fcbc5ac0d0acb765681975a93a4450d590d55b72f4f84dae1a4dbba99f5cc",
+    "issueTx": "0x29a582f19d1c0013b3a9c14ab1ea2dff092195a646144ef18ff3950023907521",
     "agentId": "0xc9bb4c9317790d917fe2da888cda19c1c96a65a7b8393ec0959bc352361d8c31",
-    "lastCapabilityId": "0xb14e7b5f0d5c7ebd6275bebd8ecaf990af7f0722f5993622264ff4f9e8964196",
-    "lastAgentId": "0xc9bb4c9317790d917fe2da888cda19c1c96a65a7b8393ec0959bc352361d8c31",
-    "lastDelegated": false,
-    "delegated": false,
-    "allowedActionTx": "0x67f6dff4baa1b0c093effabb121f280af8b4066539ac7a44bb3d0a176c4d5c64",
-    "proposedAmount": "10000000000000000",
-    "traceRoot": "0x94428c12b573200d65668c874e2247bc10076d37c745658b13e8722e000d2836",
+    "lastCapabilityId": "0xba40aa26545970f69cc6c939b7342acb714f6b7091fe5c714287a22b22e5a1b6",
+    "lastAgentId": "0x5b21b59630a56062fe4d50ca26e7ad6e13e09350aad21f0582f6fdf1d9d707f0",
+    "lastDelegated": true,
+    "delegated": true,
+    "allowedActionTx": "0x3f6cf77f3902982dc6bbee5a9551915c7867b742684a3f1de60fbd7436c7aafb",
+    "proposedAmount": "5000000000000000",
+    "traceRoot": "0x05369307c04b0c30ec4488fcb32fea4d218b99c8ad0de441114400df3a83d428",
     "blockedAction": {
       "actionNonce": 1,
-      "deadline": "1789129218",
-      "idempotencyKey": "0x9912ed2c47f66e5a44e3e10b67e6745ffa5f901c55c8bb6e3406927f589a29b8",
+      "deadline": "1789132192",
+      "idempotencyKey": "0xd6113795aeacbea283f13b61f1c7e03a86cb80bafe8c1e6d64e7133873d78553",
       "amount": "10000000000000000",
       "data": "0x",
-      "signature": "0x52fe008552fcdef5b5e3ed5da5e5f32d1d9773186f8a292119464ad69ab115b27b84024dd987e8cde357d5c26284ebad3845fedab0029d5a4fc04616dc609d0a1c",
-      "traceRoot": "0x9798d3f4de9f4c170e76d92480abfd2519d805ea6ea283312c3d09cf5cb95061"
+      "signature": "0x289ab30ed7d4e70f7adbace1bfa7db2bf6939f7005660abb790b77c6f1c5e2955f56b6cc27ec11398f20aeb1b9aec72af07761078029852398fcc9bcde9859001b",
+      "traceRoot": "0xf7a610de461fe3684428a05590af1cd6515078aeb8b5091f03d8ad62f4b2d0a5"
     }
   },
   "delegations": [
     {
-      "childCapabilityId": "0x28411e6390200bb87e27651409d9566a843645f0480476973bb0595011687783",
-      "parentCapabilityId": "0xb14e7b5f0d5c7ebd6275bebd8ecaf990af7f0722f5993622264ff4f9e8964196",
-      "taskId": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      "txHash": "0x7d94340be2be88b80dbe2dbb34e3d1cfd5a5494ce473c701986d1b07d313df28"
+      "childCapabilityId": "0xba40aa26545970f69cc6c939b7342acb714f6b7091fe5c714287a22b22e5a1b6",
+      "parentCapabilityId": "0x642fcbc5ac0d0acb765681975a93a4450d590d55b72f4f84dae1a4dbba99f5cc",
+      "scopeLeaves": [
+        "0x9e0937b36da52490bfccb6f94eb4c2547555bc17cbc201550f0f51e1b23b4e9f"
+      ],
+      "taskId": "0x50b5ae6b1a218a8bee5d2ccc1cd9e8d015a82358534915bcc9286ef833a371e0",
+      "txHash": "0x9284f8dd75a3337b0c0b990962a96f8f7d605a68c50ba67a0341c8f502126c60"
     }
   ]
 }

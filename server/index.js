@@ -1,6 +1,7 @@
 const http = require('node:http')
 const fs = require('node:fs/promises')
 const path = require('node:path')
+const { pathToFileURL } = require('node:url')
 const { randomBytes } = require('node:crypto')
 const { spawn } = require('node:child_process')
 const { Contract, JsonRpcProvider, Wallet, formatEther, keccak256, toUtf8Bytes } = require('ethers')
@@ -314,6 +315,31 @@ async function readDeployment() {
   } catch (error) {
     if (error.code === 'ENOENT') return null
     throw error
+  }
+}
+
+async function readReleasePassport(deployment) {
+  const file = process.env.AIRLOCK_MANIFEST_FILE?.trim() || path.join(__dirname, '..', 'airlock-manifest.json')
+  const document = JSON.parse(await fs.readFile(file, 'utf8'))
+  const manifestModule = await import(pathToFileURL(path.join(contractsDir, 'scripts', 'manifest.mjs')).href)
+  const verified = manifestModule.verifyDocument(document)
+  if (deployment?.release && (
+    document.releaseDigest.toLowerCase() !== deployment.release.releaseDigest.toLowerCase()
+      || document.manifestHash.toLowerCase() !== deployment.release.manifestHash.toLowerCase()
+      || document.artifactRoot.toLowerCase() !== deployment.release.artifactRoot.toLowerCase()
+  )) throw new Error('release passport does not match deployed chain state')
+  return {
+    dataSource: 'creditcoin-chain',
+    verified: true,
+    ...verified,
+    schema: document.schema,
+    orgId: document.payload.orgId,
+    releaseId: document.payload.releaseId,
+    releaseVersion: document.payload.releaseVersion,
+    suiteId: document.payload.suiteId,
+    components: document.payload.components,
+    passport: document.payload.passport,
+    fileCount: document.payload.files.length,
   }
 }
 
@@ -638,11 +664,19 @@ const server = http.createServer(async (request, response) => {
         credential: { schema: 'AIRLOCK_CREDENTIAL_V1', audience: credentialAudience(request), eip712: true, erc1271: true, attenuable: true },
         delegation: { endpoint: `${baseUrl(request)}/api/credentials/delegate`, recursive: true, registry: deployment?.creditcoin?.delegationRegistry || null },
         identity: { configured: Boolean(process.env.AIRLOCK_AGENT_REGISTRY && process.env.AIRLOCK_AGENT_ID) },
-        releasePassport: { manifest: deployment?.release?.manifestHash || null, artifactRoot: deployment?.release?.artifactRoot || null },
+        releasePassport: { endpoint: `${baseUrl(request)}/api/release-passport`, manifest: deployment?.release?.manifestHash || null, artifactRoot: deployment?.release?.artifactRoot || null, passportHash: deployment?.release?.passportHash || null, verified: Boolean(deployment?.release?.passportHash) },
         runtimeAssurance: runtimeAssurance(deployment),
       })
     } catch (error) {
       json(response, 503, { error: error.message })
+    }
+    return
+  }
+  if (request.method === 'GET' && url.pathname === '/api/release-passport') {
+    try {
+      json(response, 200, await readReleasePassport(await readDeployment()))
+    } catch (error) {
+      json(response, 503, { ok: false, error: error.message })
     }
     return
   }

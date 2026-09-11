@@ -8,6 +8,7 @@ types/
 deployments.json
 !server/deployments.json
 airlock-manifest.json
+!airlock-manifest.json
 worker-state.json
 *.local
 contracts/.env
