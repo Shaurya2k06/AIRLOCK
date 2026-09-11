@@ -119,7 +119,12 @@ async function main(): Promise<void> {
     if (Number(sourceNetwork.chainId) !== sourceChainId) throw new Error(`SOURCE_CHAIN_ID=${sourceChainId} does not match RPC chain ${sourceNetwork.chainId}`);
     if (Number(creditcoinNetwork.chainId) !== creditcoinChainId) throw new Error(`CREDITCOIN_CHAIN_ID=${creditcoinChainId} does not match RPC chain ${creditcoinNetwork.chainId}`);
     const chainKey = await sourceChainKey(creditcoinRpc, sourceChainId);
-    const fundingNames = [...sourceKeyNames, "CREDITCOIN_DEPLOYER_PRIVATE_KEY", "CREDITCOIN_WORKER_PRIVATE_KEY"];
+    const fundingNames = [
+        ...sourceKeyNames,
+        "CREDITCOIN_DEPLOYER_PRIVATE_KEY",
+        "CREDITCOIN_WORKER_PRIVATE_KEY",
+        "CREDITCOIN_POLICY_ADMIN_PRIVATE_KEY",
+    ];
     const fundingBalances = await Promise.all(fundingNames.map(async (name) => {
         const provider = name.startsWith("SOURCE_") ? sourceRpc : creditcoinRpc;
         const balance = await provider.getBalance(addresses[name]);

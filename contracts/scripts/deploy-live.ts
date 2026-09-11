@@ -219,12 +219,12 @@ async function main() {
         await statusRegistry.getAddress(),
     );
 
-    await send(evidence, "setAdapter", await adapter.getAddress());
-    await send(vault, "setRouter", await router.getAddress());
-    await send(issuer, "setRouter", await router.getAddress());
-    await send(router, "registerAction", await paymentToken.getAddress(), paymentSelector, await paymentValidator.getAddress(), paymentConstraints);
-    await send(router, "registerAction", await protocol.getAddress(), depositSelector, await depositValidator.getAddress(), depositConstraints);
-    await send(policies, "register", policyInput);
+    await send(evidence.connect(policyAdmin), "setAdapter", await adapter.getAddress());
+    await send(vault.connect(policyAdmin), "setRouter", await router.getAddress());
+    await send(issuer.connect(policyAdmin), "setRouter", await router.getAddress());
+    await send(router.connect(policyAdmin), "registerAction", await paymentToken.getAddress(), paymentSelector, await paymentValidator.getAddress(), paymentConstraints);
+    await send(router.connect(policyAdmin), "registerAction", await protocol.getAddress(), depositSelector, await depositValidator.getAddress(), depositConstraints);
+    await send(policies.connect(policyAdmin), "register", policyInput);
     await send(paymentToken, "mint", await vault.getAddress(), spendCeiling);
     const fundingTransaction = await creditcoinDeployer.sendTransaction({
         to: await vault.getAddress(),
@@ -235,7 +235,7 @@ async function main() {
     const now = Math.floor(Date.now() / 1000) - 30;
     const validUntil = now + 86_400;
     const artifactTx = await send(
-        artifactRegistry,
+        artifactRegistry.connect(publisher),
         "publish",
         orgId,
         releaseId,
@@ -253,7 +253,7 @@ async function main() {
         1,
     );
     const evaluationTx = await send(
-        evaluationRegistry,
+        evaluationRegistry.connect(evaluator),
         "certify",
         orgId,
         releaseId,
@@ -268,7 +268,7 @@ async function main() {
         1,
     );
     const approvalTx = await send(
-        approvalRegistry,
+        approvalRegistry.connect(approver),
         "approve",
         orgId,
         agentId,
@@ -283,7 +283,7 @@ async function main() {
         validUntil,
         1,
     );
-    const statusTx = await send(statusRegistry, "checkpoint", orgId, digest, 1, 1, now, validUntil);
+    const statusTx = await send(statusRegistry.connect(statusAuthority), "checkpoint", orgId, digest, 1, 1, now, validUntil);
 
     const deployment = {
         generatedAt: new Date().toISOString(),
