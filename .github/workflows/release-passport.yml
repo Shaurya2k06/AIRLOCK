@@ -12,7 +12,7 @@ jobs:
   passport:
     runs-on: ubuntu-latest
     env:
-      IMAGE: ghcr.io/${{ github.repository_owner }}/airlock-agent
+      IMAGE: ghcr.io/shaurya2k06/airlock-agent
       SIGSTORE_CERTIFICATE_IDENTITY_URI: https://github.com/${{ github.repository }}/.github/workflows/release-passport.yml@refs/heads/main
       SIGSTORE_CERTIFICATE_ISSUER: https://token.actions.githubusercontent.com
     steps:
