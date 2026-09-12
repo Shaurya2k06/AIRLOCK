@@ -181,7 +181,7 @@ action; `LIVE_STEP=revoke`, a revocation proof import, and
 
 The dashboard uses only `CREDITCOIN_RPC_URL` and the generated
 `deployments.json` for live reads; the Vite client optionally uses
-`VITE_API_URL` (default `http://127.0.0.1:8787`). The `/demo` runbook surfaces
+`VITE_API_URL` (default `https://airlock-control-plane.onrender.com`). The `/demo` runbook surfaces
 the terminal workflow and can run its allowlisted testnet commands when the
 server has `AIRLOCK_ENABLE_WRITES=true` and, for hosted deployments,
 `AIRLOCK_WRITE_TOKEN`. Public live addresses,

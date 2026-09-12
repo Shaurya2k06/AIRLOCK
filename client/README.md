@@ -11,7 +11,7 @@ npm run lint
 ```
 
 Copy `.env.example` to `.env` only when the API is not at the default
-`http://127.0.0.1:8787`, then set `VITE_API_URL`. The client
+`https://airlock-control-plane.onrender.com`, then set `VITE_API_URL`. The client
 has no wallet, RPC, or private-key configuration. The server exposes write
 runbook actions only when `AIRLOCK_ENABLE_WRITES=true` is set in its
 environment; hosted writes additionally require its operator token.

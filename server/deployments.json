@@ -18,7 +18,7 @@
       "artifactTx": "0xfafaf01f51784f2c18f966bd9eff849d5e358340516e49fdea5370aff67ef62d",
       "evaluationTx": "0x75f00f6cae34f0d125e21ea819ef817f00b3422463e47fc2aa90d671eaeb6ab6",
       "approvalTx": "0x9dcd35a79304791b254417a4fa5bb64417c1cb1e51040c40a786f35344e27028",
-      "statusTx": "0x32c95955e1df829b291cb9a5b427f038ea7e2c2943e55bfb37c8f21209166d39"
+      "statusTx": "0xf314c040f20f9b9e5e22b8812508ce859e05448a7843b6f7ecc7590fcf550c80"
     }
   },
   "creditcoin": {
@@ -170,32 +170,70 @@
     },
     "status": {
       "kind": "status",
-      "txHash": "0x32c95955e1df829b291cb9a5b427f038ea7e2c2943e55bfb37c8f21209166d39",
+      "txHash": "0xc8a7eae6015080503631b27b2c9d26f1de52727ed006bdcbffebcdc9dda9b663",
       "sourceChainKey": 1,
-      "sourceBlock": 11683654,
-      "sourceTxIndex": 106,
+      "sourceBlock": 11684154,
+      "sourceTxIndex": 170,
       "logIndex": 0,
       "sourceEmitter": "0x74Da99939AFC64808aF49f00307153C401c3dc29",
       "sourceTopic0": "0x683b23e8cb64092e7aa42c46ca0f70c92f3fffa53f0f78a85339a5ee5af10b9f",
       "receiptStatus": 1,
       "proofBytes": 1888,
       "merkleSiblingCount": 8,
-      "creditcoinTxHash": "0x77af98c16fe33cb247160977b0813a2bf4b477a03e020ace839d5c05f596ed58",
+      "creditcoinTxHash": "0x9ac1789a1896d06cdccc71a15f2c4d998dfc48ac005c3e9b784a8546ba91a2d8",
       "creditcoinGasUsed": "371896",
+      "cachedProof": true
+    },
+    "revocation": {
+      "kind": "revocation",
+      "txHash": "0xe366b8159771658a5c97702453f72e8e78d5fd7dddb730b3f05bc8ecbb4c61af",
+      "sourceChainKey": 1,
+      "sourceBlock": 11684295,
+      "sourceTxIndex": 127,
+      "logIndex": 0,
+      "sourceEmitter": "0x74Da99939AFC64808aF49f00307153C401c3dc29",
+      "sourceTopic0": "0xc3c8992a61b3d0d2bd05a0068bfa4554d89c6d2196aafadf297de401e621abd8",
+      "receiptStatus": 1,
+      "proofBytes": 1824,
+      "merkleSiblingCount": 8,
+      "creditcoinTxHash": "0x9acba7724f45cd5853867ed89bfddd7e5c9f367384941adbefa1a699919ad7dd",
+      "creditcoinGasUsed": "370552",
       "cachedProof": true
     }
   },
   "live": {
-    "capabilityId": "0xdca151dea0044244633decaca89059dafed027f1a49282c5d3e3f59f5d20e3a4",
-    "rootCapabilityId": "0xdca151dea0044244633decaca89059dafed027f1a49282c5d3e3f59f5d20e3a4",
-    "issueTx": "0x7989f5eeb726855a2b354d1ede0b111030bfb293f4b0d3a9dd5eaa2223e9a760",
+    "capabilityId": "0x1ad791e4647c77f452422be784859c5cefa3f8e5f936c43b8d8da73847e762f3",
+    "rootCapabilityId": "0x1ad791e4647c77f452422be784859c5cefa3f8e5f936c43b8d8da73847e762f3",
+    "issueTx": "0x98e6daafb7fb59fb6ed3748d2b8a6546a8c98637573482fcd511e3722dda63fe",
     "agentId": "0xc9bb4c9317790d917fe2da888cda19c1c96a65a7b8393ec0959bc352361d8c31",
-    "lastCapabilityId": "0xdca151dea0044244633decaca89059dafed027f1a49282c5d3e3f59f5d20e3a4",
+    "lastCapabilityId": "0x1ad791e4647c77f452422be784859c5cefa3f8e5f936c43b8d8da73847e762f3",
     "lastAgentId": "0xc9bb4c9317790d917fe2da888cda19c1c96a65a7b8393ec0959bc352361d8c31",
-    "lastDelegated": false,
-    "delegated": false,
-    "allowedActionTx": "0x15c5e79b973404f23ef22a096c9c55d2b84d800aaf1dd86f3c98812a06659d11",
-    "proposedAmount": "10000000000000000",
-    "traceRoot": "0x9883706b788aa9795951a1d1f60e0a8f1a0759024b0f63ada3acb2fc08fc6d3f"
-  }
+    "lastDelegated": true,
+    "delegated": true,
+    "allowedActionTx": "0xf2a160ae8b6dd742433e5927ef8a86b29f98102950bf48b7dc19afbcb3e41d6b",
+    "proposedAmount": "1000000000000000",
+    "traceRoot": "0xffbf2a330e82eaac8200e85842e96d9ae1e4fa1951df7d3e0c5eb5bcbbd71572"
+  },
+  "delegations": [
+    {
+      "childCapabilityId": "0x97700f5f8d582e50be4de5f61a591573541f0909345a280318e57d24c3716933",
+      "parentCapabilityId": "0xdca151dea0044244633decaca89059dafed027f1a49282c5d3e3f59f5d20e3a4",
+      "scopeLeaves": [
+        "0xbb2c68d1fe66e5cdf69f792ce0d3d0f1f55dfb0cb47425e57680d4495e17080e",
+        "0xfa654a24b5a33c312b3c29395a17ade3c212e90180904eecd1f35a1fcc5d9bbd"
+      ],
+      "taskId": "0x6db6f796f89d1bbd64bfd84d571e4597d248300b0d4f09c39648c007a0604772",
+      "txHash": "0x4f45dc6f3eb1e9215f50597c66e4f2bdce7e0b31687a9217aef0195d51c767a5"
+    },
+    {
+      "childCapabilityId": "0x72533fad59e7b543f02dc7fc9aeedee85de78065e1014c529ba5137c3fc8511b",
+      "parentCapabilityId": "0xdca151dea0044244633decaca89059dafed027f1a49282c5d3e3f59f5d20e3a4",
+      "scopeLeaves": [
+        "0xbb2c68d1fe66e5cdf69f792ce0d3d0f1f55dfb0cb47425e57680d4495e17080e",
+        "0xfa654a24b5a33c312b3c29395a17ade3c212e90180904eecd1f35a1fcc5d9bbd"
+      ],
+      "taskId": "0xf98a57bd3971184788e9972373ffb1b785bbd4350bf1c12ead17de1060306ce6",
+      "txHash": "0x414a1c84ef4fb731e3f56079fdd0315424479922aa28ef10d083c0c505c69077"
+    }
+  ]
 }

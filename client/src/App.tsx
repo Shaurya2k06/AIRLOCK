@@ -85,7 +85,7 @@ type ReleasePassport = {
 type DisplayEvidence = { label: string; detail: string; time?: string; status: string; icon: IconName; txHash?: string; creditcoinTxHash?: string; sourceChainKey?: number; sourceEmitter?: string; sourceTopic0?: string; sourceBlock?: number; logIndex?: number; receiptStatus?: number }
 type RunbookStep = { id: string; label: string; command: string; kind: string; status: string; canRun: boolean; requiresWrite: boolean }
 type Runbook = { mode: string; writesEnabled: boolean; writeAuthRequired?: boolean; steps: RunbookStep[] }
-const API_URL = (import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8787').replace(/\/$/, '')
+const API_URL = (import.meta.env.VITE_API_URL ?? 'https://airlock-control-plane.onrender.com').replace(/\/$/, '')
 
 const architectureNodes: Node[] = [
   { id: 'source', position: { x: 0, y: 112 }, data: { label: 'Ethereum\nsource event' }, sourcePosition: Position.Right, targetPosition: Position.Left, style: { background: '#18233b', border: '1px solid #526ba8', color: '#d9e4ff' } },
