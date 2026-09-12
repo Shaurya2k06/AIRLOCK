@@ -6,7 +6,22 @@ function spiffeIdValid(value) {
 
 function runtimeAssurance(deployment = {}) {
   if (deployment.teeBinding?.creditcoinTxHash && deployment.release?.runtimeAssurance === 'L2') {
-    return { level: 'L2', name: 'hardware bound', verified: true, source: 'RuntimeBindingRegistry' }
+    const binding = deployment.teeBinding
+    return {
+      level: 'L2',
+      name: 'hardware bound',
+      verified: true,
+      source: 'RuntimeBindingRegistry',
+      binding: {
+        id: binding.bindingId || null,
+        measurement: binding.teeMeasurement || null,
+        quoteHash: binding.quoteHash || null,
+        runtimeNonce: binding.runtimeNonce ?? null,
+        validAfter: binding.validAfter ?? null,
+        validUntil: binding.validUntil ?? null,
+        creditcoinTxHash: binding.creditcoinTxHash,
+      },
+    }
   }
   if (process.env.SPIFFE_ENDPOINT_SOCKET?.trim() && spiffeIdValid(process.env.SPIFFE_ID?.trim())) {
     return { level: 'L1', name: 'workload bound', verified: false, source: 'SPIFFE/SPIRE configuration', note: 'SVID verification belongs to the workload identity provider.' }

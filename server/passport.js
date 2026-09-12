@@ -82,15 +82,38 @@ async function verifySigstore(bundle, document) {
 }
 
 async function verifyOciRegistry(containerDigest) {
-  const image = process.env.AIRLOCK_OCI_IMAGE_REF?.trim()
+  const image = process.env.AIRLOCK_OCI_IMAGE_REF?.trim() || 'ghcr.io/shaurya2k06/airlock-agent'
   if (!image) return { status: 'not-configured' }
   const separator = image.indexOf('/')
   if (separator < 1) throw new Error('AIRLOCK_OCI_IMAGE_REF must include a registry and repository')
   const registry = image.slice(0, separator)
   const repository = image.slice(separator + 1)
-  const response = await fetch(`https://${registry}/v2/${repository}/manifests/${containerDigest}`, {
-    headers: { accept: 'application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' },
-  })
+  const manifestUrl = `https://${registry}/v2/${repository}/manifests/${containerDigest}`
+  const accept = 'application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json'
+  let response = await fetch(manifestUrl, { headers: { accept } })
+  if (response.status === 401 || response.status === 403) {
+    const challenge = response.headers.get('www-authenticate') || ''
+    const realm = challenge.match(/realm="([^"]+)"/i)?.[1]
+    if (realm) {
+      const params = new URL(realm)
+      const service = challenge.match(/service="([^"]+)"/i)?.[1]
+      const scope = challenge.match(/scope="([^"]+)"/i)?.[1]
+      if (service) params.searchParams.set('service', service)
+      if (scope) params.searchParams.set('scope', scope)
+      const tokenHeaders = {}
+      const registryToken = process.env.AIRLOCK_OCI_REGISTRY_TOKEN?.trim()
+      if (registryToken) {
+        const username = process.env.AIRLOCK_OCI_REGISTRY_USERNAME?.trim() || 'airlock'
+        tokenHeaders.authorization = `Basic ${Buffer.from(`${username}:${registryToken}`).toString('base64')}`
+      }
+      const tokenResponse = await fetch(params, { headers: tokenHeaders })
+      if (tokenResponse.ok) {
+        const token = await tokenResponse.json()
+        const bearer = token.token || token.access_token
+        if (typeof bearer === 'string' && bearer) response = await fetch(manifestUrl, { headers: { accept, authorization: `Bearer ${bearer}` } })
+      }
+    }
+  }
   if (!response.ok) throw new Error(`OCI registry returned ${response.status} for ${image}@${containerDigest}`)
   const resolved = response.headers.get('docker-content-digest')
   if (resolved && resolved.toLowerCase() !== containerDigest.toLowerCase()) throw new Error('OCI registry digest mismatch')
@@ -154,6 +177,7 @@ async function verifyPassportArtifacts(document, releaseDir, { requireExternal =
   await check('oci', async () => verifyOciRegistry(containerDigest || ''))
 
   const externalChecks = ['container', 'sbom', 'provenance', 'sigstore', 'rekor']
+  if (checks.oci?.status !== 'not-configured') externalChecks.push('oci')
   const externalVerified = externalChecks.every((name) => checks[name]?.status === 'verified')
   if (requireExternal && !externalVerified) errors.push('external release passport verification is required')
   return { verified: errors.length === 0 && (!requireExternal || externalVerified), checks, errors }
