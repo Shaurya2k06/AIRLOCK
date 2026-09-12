@@ -96,6 +96,9 @@ async function collectFiles(root, excludedFile) {
             if (resolve(filePath) === excluded) continue;
             // airlock.json describes the build inputs; it is not itself a release artifact.
             if (path === "airlock.json") continue;
+            // Passport signatures cover the stable release content; their own hashes live in
+            // payload.passport so adding a signature cannot create a circular artifact root.
+            if (path === componentDefaults.sigstoreBundle || path === componentDefaults.rekorProof) continue;
             if (entry.isSymbolicLink()) throw new Error(`symbolic links are not allowed: ${path}`);
             if (entry.isDirectory()) {
                 await walk(filePath, path);

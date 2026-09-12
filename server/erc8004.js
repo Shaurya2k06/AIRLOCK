@@ -44,8 +44,12 @@ function validateRegistration(registration, { agentRegistry, agentId, releaseDig
     throw new Error('unsupported ERC-8004 registration type')
   }
   if (!Array.isArray(registration.services)) throw new Error('ERC-8004 registration must include services')
-  if (agentRegistry && registration.agentRegistry !== agentRegistry) throw new Error('registration agentRegistry mismatch')
-  if (agentId !== undefined && String(registration.agentId) !== String(agentId)) throw new Error('registration agentId mismatch')
+  const references = Array.isArray(registration.registrations) ? registration.registrations : []
+  const registryMatch = registration.agentRegistry
+    ? { agentRegistry: registration.agentRegistry, agentId: registration.agentId }
+    : references.find((item) => item?.agentRegistry === agentRegistry && String(item?.agentId) === String(agentId))
+  if (agentRegistry && (!registryMatch || registryMatch.agentRegistry !== agentRegistry)) throw new Error('registration agentRegistry mismatch')
+  if (agentId !== undefined && (!registryMatch || String(registryMatch.agentId) !== String(agentId))) throw new Error('registration agentId mismatch')
   if (releaseDigest) {
     const advertised = registration.metadata?.releaseDigest || registration.releaseDigest
     if (advertised && String(advertised).toLowerCase() !== String(releaseDigest).toLowerCase()) {

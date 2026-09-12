@@ -235,5 +235,15 @@
       "taskId": "0xf98a57bd3971184788e9972373ffb1b785bbd4350bf1c12ead17de1060306ce6",
       "txHash": "0x414a1c84ef4fb731e3f56079fdd0315424479922aa28ef10d083c0c505c69077"
     }
-  ]
+  ],
+  "identity": {
+    "agentRegistry": "eip155:11155111:0x8004A818BFB912233c491871b3d84c89A494BD9e",
+    "agentId": "10239",
+    "identityRegistry": "0x8004A818BFB912233c491871b3d84c89A494BD9e",
+    "rpcUrl": "https://ethereum-sepolia-rpc.publicnode.com",
+    "registrationUri": "https://airlock-control-plane.onrender.com/.well-known/agent-registration.json?agentId=10239",
+    "owner": "0x4C3F5a84041E562928394d63b3E339bE70DBcC17",
+    "registerTxHash": "0x8c5fa57586e7173e90204c4c1e95b2b61d5d82fdd4f640e8bb4df44b35de783a",
+    "uriTxHash": "0x1dcbdb41aad007e6f6d8b4504e7568926c95ec86f5a19783bbc5aebb6a24fafb"
+  }
 }

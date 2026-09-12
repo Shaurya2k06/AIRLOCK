@@ -23,6 +23,7 @@ const { readIdentity } = require('./erc8004')
 const { verifyQuorum } = require('./evaluator-quorum')
 const { buildTraceGraph } = require('./trace')
 const { runtimeAssurance } = require('./runtime-assurance')
+const { verifyPassportArtifacts } = require('./passport')
 
 const port = Number(process.env.PORT || 8787)
 const host = process.env.HOST || '127.0.0.1'
@@ -32,6 +33,7 @@ const contractsDir = path.join(__dirname, '..', 'contracts')
 const commandTimeoutMs = Number(process.env.AIRLOCK_COMMAND_TIMEOUT_MS || 15 * 60 * 1000)
 const localHosts = new Set(['127.0.0.1', 'localhost', '::1'])
 const ZERO_ADDRESS = `0x${'00'.repeat(20)}`
+const DEFAULT_IDENTITY_RPC_URL = 'https://ethereum-sepolia-rpc.publicnode.com'
 const writeOrigins = new Set((process.env.AIRLOCK_CLIENT_ORIGIN || 'http://127.0.0.1:5173,http://localhost:5173').split(',').map((value) => value.trim()).filter(Boolean))
 let activeRunbookJob = false
 const credentialIssuerKey = () => process.env.AIRLOCK_CREDENTIAL_ISSUER_PRIVATE_KEY?.trim() || process.env.CREDITCOIN_POLICY_ADMIN_PRIVATE_KEY?.trim()
@@ -82,6 +84,37 @@ function baseUrl(request) {
 
 function credentialAudience(request) {
   return process.env.AIRLOCK_MCP_AUDIENCE?.trim() || `${baseUrl(request)}/mcp`
+}
+
+function identityConfig(deployment) {
+  return {
+    agentRegistry: process.env.AIRLOCK_AGENT_REGISTRY?.trim() || deployment?.identity?.agentRegistry || deployment?.release?.agentRegistry,
+    agentId: process.env.AIRLOCK_AGENT_ID?.trim() || deployment?.identity?.agentId,
+    rpcUrl: process.env.AIRLOCK_IDENTITY_RPC_URL?.trim() || deployment?.identity?.rpcUrl || DEFAULT_IDENTITY_RPC_URL,
+  }
+}
+
+function registrationDocument(deployment, request, agentId) {
+  const identity = identityConfig(deployment)
+  const base = baseUrl(request)
+  const assurance = runtimeAssurance(deployment)
+  return {
+    type: 'https://eips.ethereum.org/EIPS/eip-8004#registration-v1',
+    name: 'AIRLOCK Release Authority',
+    description: 'An authorization gateway for release-bound autonomous agents.',
+    services: [
+      { name: 'mcp', serviceEndpoint: `${base}/mcp`, version: '2026-07-28' },
+      { name: 'a2a', serviceEndpoint: `${base}/a2a`, version: '0.3.0' },
+    ],
+    registrations: [{ agentRegistry: identity.agentRegistry, agentId: String(agentId) }],
+    supportedTrust: ['crypto-economic', ...(assurance.level === 'L2' ? ['tee-attestation'] : [])],
+    metadata: {
+      releaseDigest: deployment?.release?.releaseDigest || ZERO_BYTES32,
+      manifestHash: deployment?.release?.manifestHash || ZERO_BYTES32,
+      passportHash: deployment?.release?.passportHash || ZERO_BYTES32,
+      runtimeAssurance: assurance.level,
+    },
+  }
 }
 
 function credentialEvidenceRoot(deployment) {
@@ -333,9 +366,14 @@ async function readReleasePassport(deployment) {
       || document.manifestHash.toLowerCase() !== deployment.release.manifestHash.toLowerCase()
       || document.artifactRoot.toLowerCase() !== deployment.release.artifactRoot.toLowerCase()
   )) throw new Error('release passport does not match deployed chain state')
+  const passportVerification = await verifyPassportArtifacts(
+    document,
+    process.env.AIRLOCK_RELEASE_DIR?.trim() || path.join(__dirname, '..', 'fixtures', 'releases', 'demo'),
+    { requireExternal: process.env.AIRLOCK_REQUIRE_EXTERNAL_PASSPORT === 'true' },
+  )
   return {
     dataSource: 'creditcoin-chain',
-    verified: true,
+    verified: Boolean(verified && passportVerification.verified),
     ...verified,
     schema: document.schema,
     orgId: document.payload.orgId,
@@ -344,6 +382,7 @@ async function readReleasePassport(deployment) {
     suiteId: document.payload.suiteId,
     components: document.payload.components,
     passport: document.payload.passport,
+    passportVerification,
     fileCount: document.payload.files.length,
   }
 }
@@ -650,13 +689,26 @@ const server = http.createServer(async (request, response) => {
     })
     return
   }
+  if (request.method === 'GET' && url.pathname === '/.well-known/agent-registration.json') {
+    try {
+      const deployment = await readDeployment()
+      const identity = identityConfig(deployment)
+      const agentId = url.searchParams.get('agentId') || identity.agentId
+      if (!identity.agentRegistry || !agentId) return json(response, 503, { error: 'ERC-8004 identity is not registered' })
+      json(response, 200, registrationDocument(deployment, request, agentId))
+    } catch (error) {
+      json(response, 503, { error: error.message })
+    }
+    return
+  }
   if (request.method === 'GET' && url.pathname === '/.well-known/agent-card.json') {
     try {
       const deployment = await readDeployment()
+      const identity = identityConfig(deployment)
       json(response, 200, agentCard({
         baseUrl: baseUrl(request),
-        agentRegistry: process.env.AIRLOCK_AGENT_REGISTRY || deployment?.release?.agentRegistry || 'airlock:unregistered',
-        agentId: deployment?.release?.agentId || ZERO_BYTES32,
+        agentRegistry: identity.agentRegistry || 'airlock:unregistered',
+        agentId: identity.agentId || deployment?.release?.agentId || ZERO_BYTES32,
         releaseDigest: deployment?.release?.releaseDigest || ZERO_BYTES32,
       }))
     } catch (error) {
@@ -668,6 +720,8 @@ const server = http.createServer(async (request, response) => {
     try {
       const deployment = await readDeployment()
       const current = await overview()
+      const identity = identityConfig(deployment)
+      const passport = await readReleasePassport(deployment)
       json(response, 200, {
         protocolVersion: 'AIRLOCK_PROTOCOL_V1',
         dataSource: current.dataSource,
@@ -676,8 +730,8 @@ const server = http.createServer(async (request, response) => {
         a2a: { endpoint: `${baseUrl(request)}/a2a`, agentCard: `${baseUrl(request)}/.well-known/agent-card.json` },
         credential: { schema: 'AIRLOCK_CREDENTIAL_V1', audience: credentialAudience(request), eip712: true, erc1271: true, attenuable: true },
         delegation: { endpoint: `${baseUrl(request)}/api/credentials/delegate`, recursive: true, registry: deployment?.creditcoin?.delegationRegistry || null },
-        identity: { configured: Boolean(process.env.AIRLOCK_AGENT_REGISTRY && process.env.AIRLOCK_AGENT_ID) },
-        releasePassport: { endpoint: `${baseUrl(request)}/api/release-passport`, manifest: deployment?.release?.manifestHash || null, artifactRoot: deployment?.release?.artifactRoot || null, passportHash: deployment?.release?.passportHash || null, verified: Boolean(deployment?.release?.passportHash) },
+        identity: { configured: Boolean(identity.agentRegistry && identity.agentId), agentRegistry: identity.agentRegistry || null, agentId: identity.agentId || null },
+        releasePassport: { endpoint: `${baseUrl(request)}/api/release-passport`, manifest: deployment?.release?.manifestHash || null, artifactRoot: deployment?.release?.artifactRoot || null, passportHash: deployment?.release?.passportHash || null, verified: passport.verified, verification: passport.passportVerification },
         runtimeAssurance: runtimeAssurance(deployment),
       })
     } catch (error) {
@@ -756,12 +810,11 @@ const server = http.createServer(async (request, response) => {
   if (request.method === 'GET' && url.pathname === '/api/identity') {
     try {
       const deployment = await readDeployment()
-      const agentRegistry = process.env.AIRLOCK_AGENT_REGISTRY?.trim() || deployment?.release?.agentRegistry
-      const agentId = process.env.AIRLOCK_AGENT_ID?.trim() || deployment?.release?.agentId
-      if (!agentRegistry || !agentId || !process.env.AIRLOCK_IDENTITY_RPC_URL) {
-        json(response, 200, { configured: false, reason: 'set AIRLOCK_AGENT_REGISTRY, AIRLOCK_AGENT_ID, and AIRLOCK_IDENTITY_RPC_URL to enable ERC-8004 verification' })
+      const identity = identityConfig(deployment)
+      if (!identity.agentRegistry || !identity.agentId) {
+        json(response, 200, { configured: false, reason: 'register the AIRLOCK ERC-8004 identity before verifying it' })
       } else {
-        json(response, 200, { configured: true, ...(await readIdentity({ rpcUrl: process.env.AIRLOCK_IDENTITY_RPC_URL, agentRegistry, agentId, releaseDigest: deployment?.release?.releaseDigest })) })
+        json(response, 200, { configured: true, ...(await readIdentity({ rpcUrl: identity.rpcUrl, agentRegistry: identity.agentRegistry, agentId: identity.agentId, releaseDigest: deployment?.release?.releaseDigest })) })
       }
     } catch (error) {
       json(response, 400, { configured: false, error: error.message })

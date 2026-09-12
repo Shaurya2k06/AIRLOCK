@@ -1,0 +1,86 @@
+name: Build verified release passport
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+  packages: write
+
+jobs:
+  passport:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/airlock-agent
+      SIGSTORE_CERTIFICATE_IDENTITY_URI: https://github.com/${{ github.repository }}/.github/workflows/release-passport.yml@refs/heads/main
+      SIGSTORE_CERTIFICATE_ISSUER: https://token.actions.githubusercontent.com
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            contracts/package-lock.json
+            server/package-lock.json
+            client/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          npm --prefix contracts ci
+          npm --prefix server ci
+          npm --prefix client ci
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and publish the OCI runtime
+        id: image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.agent
+          push: true
+          tags: ${{ env.IMAGE }}:${{ github.sha }}
+
+      - uses: sigstore/cosign-installer@v3.8.1
+
+      - name: Build release evidence inputs
+        working-directory: contracts
+        env:
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          printf '%s\n' "$IMAGE_DIGEST" > ../fixtures/releases/demo/container.digest
+          npm sbom --package-lock-only --sbom-format cyclonedx --sbom-type application > /tmp/contracts-sbom.json
+          npm --prefix ../server sbom --package-lock-only --sbom-format cyclonedx --sbom-type application > /tmp/server-sbom.json
+          npm --prefix ../client sbom --package-lock-only --sbom-format cyclonedx --sbom-type application > /tmp/client-sbom.json
+          node scripts/build-passport-sbom.mjs ../fixtures/releases/demo/sbom.json /tmp/contracts-sbom.json /tmp/server-sbom.json /tmp/client-sbom.json
+          node scripts/build-slsa-provenance.mjs ../fixtures/releases/demo/provenance.json "$IMAGE_DIGEST" "$IMAGE" "$GITHUB_SHA"
+          node scripts/manifest.mjs build --input ../fixtures/releases/demo --output ../airlock-manifest.json --org-id airlock-demo-org --release-id airlock-demo-release --release-version "$GITHUB_RUN_NUMBER"
+
+      - name: Sign stable release content with Sigstore
+        working-directory: contracts
+        run: |
+          node --input-type=module -e 'import { readFile, writeFile } from "node:fs/promises"; const d=JSON.parse(await readFile("../airlock-manifest.json", "utf8")); await writeFile("/tmp/airlock-release-content.txt", ["AIRLOCK_RELEASE_CONTENT_V1", d.artifactRoot, d.payload.components.containerImageDigest, d.payload.components.sbomHash, d.payload.components.provenanceHash].join("\\n"))'
+          cosign sign-blob --yes --bundle ../fixtures/releases/demo/sigstore.bundle.json /tmp/airlock-release-content.txt
+          node scripts/build-rekor-proof.mjs ../fixtures/releases/demo/sigstore.bundle.json /tmp/airlock-release-content.txt ../fixtures/releases/demo/rekor-proof.json
+          node scripts/manifest.mjs build --input ../fixtures/releases/demo --output ../airlock-manifest.json --org-id airlock-demo-org --release-id airlock-demo-release --release-version "$GITHUB_RUN_NUMBER"
+
+      - name: Verify the completed passport
+        working-directory: contracts
+        run: npm run passport:verify
+
+      - name: Commit the verified passport
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add airlock-manifest.json fixtures/releases/demo/container.digest fixtures/releases/demo/sbom.json fixtures/releases/demo/provenance.json fixtures/releases/demo/sigstore.bundle.json fixtures/releases/demo/rekor-proof.json
+          git commit -m "Update verified release passport [skip ci]" || exit 0
+          git push origin HEAD:main
