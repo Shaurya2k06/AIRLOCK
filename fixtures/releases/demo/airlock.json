@@ -10,5 +10,5 @@
   "container": "container.digest",
   "sbom": "sbom.json",
   "provenance": "provenance.json",
-  "runtimeAssurance": "L0"
+  "runtimeAssurance": "L2"
 }

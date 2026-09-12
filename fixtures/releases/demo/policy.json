@@ -9,5 +9,5 @@
     "tools": ["vendor.pay", "protocol.deposit"],
     "delegation": { "maxDepth": 3, "riskLimit": 1 }
   },
-  "runtimeAssurance": "L0"
+  "runtimeAssurance": "L2"
 }
