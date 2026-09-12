@@ -413,6 +413,15 @@ async function liveOverview(deployment) {
   if (deployment.live?.depositActionTx) {
     actions.push({ action: 'protocol.deposit', target: short(deployment.creditcoin.protocol), amount: Number(formatEther(BigInt(deployment.release.depositAmount || '100000000000000000'))), state: 'Allowed', age: short(deployment.live.depositActionTx), txHash: deployment.live.depositActionTx, traceRoot: deployment.live.depositTraceRoot })
   }
+  const sourceTransactions = Object.fromEntries(Object.entries(deployment.source?.transactions || {}).filter(([, value]) => typeof value === 'string'))
+  const proofTransactions = Object.fromEntries(Object.entries(deployment.proofs || {}).map(([kind, value]) => [kind, {
+    txHash: value?.txHash,
+    creditcoinTxHash: value?.creditcoinTxHash,
+  }]))
+  const liveTransactions = Object.fromEntries(['issueTx', 'allowedActionTx', 'depositActionTx'].flatMap((name) => {
+    const value = deployment.live?.[name]
+    return typeof value === 'string' ? [[name, value]] : []
+  }))
   return {
     mode: 'live',
     dataSource: 'creditcoin-chain',
@@ -444,6 +453,7 @@ async function liveOverview(deployment) {
     },
     actions,
     traceRoot: deployment.live?.traceRoot || deployment.live?.depositTraceRoot || null,
+    transactions: { source: sourceTransactions, proofs: proofTransactions, live: liveTransactions },
   }
 }
 
@@ -513,7 +523,7 @@ const runbookCommands = new Map([
 function executeRunbookStep(stepId, extraEnv = {}) {
   const command = runbookCommands.get(stepId)
   if (!command) return Promise.resolve({ ok: false, code: null, output: 'unknown runbook step' })
-  const safeEnv = Object.fromEntries(Object.entries(extraEnv).filter(([name, value]) => ['LIVE_RECIPIENT', 'LIVE_AMOUNT', 'AIRLOCK_TRACE_ROOT', 'LIVE_CAPABILITY_ID', 'LIVE_AGENT_ID'].includes(name) && typeof value === 'string'))
+  const safeEnv = Object.fromEntries(Object.entries(extraEnv).filter(([name, value]) => ['LIVE_RECIPIENT', 'LIVE_AMOUNT', 'AIRLOCK_TRACE_ROOT', 'LIVE_CAPABILITY_ID', 'LIVE_AGENT_ID', 'SOURCE_TX_HASHES', 'IMPORT_KINDS', 'SOURCE_LOG_INDICES'].includes(name) && typeof value === 'string'))
   return new Promise((resolve) => {
     const output = []
     let outputSize = 0
@@ -874,7 +884,14 @@ const server = http.createServer(async (request, response) => {
       }
       if (activeRunbookJob) return json(response, 409, { ok: false, error: 'another runbook action is already running' })
       activeRunbookJob = true
-      const result = await executeRunbookStep(step)
+      const sourceTransactions = deployment?.source?.transactions || {}
+      const batchEnv = step === 'proof-batch'
+        ? {
+            SOURCE_TX_HASHES: ['artifactTx', 'evaluationTx', 'approvalTx', 'statusTx'].map((name) => sourceTransactions[name]).filter(Boolean).join(','),
+            IMPORT_KINDS: 'artifact,evaluation,approval,status',
+          }
+        : {}
+      const result = await executeRunbookStep(step, batchEnv)
       activeRunbookJob = false
       mcpGateway.notifyToolsChanged()
       json(response, result.ok ? 200 : 400, { ...result, runbook: runbook(await readDeployment()) })

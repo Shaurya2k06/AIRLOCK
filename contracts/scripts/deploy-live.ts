@@ -183,7 +183,8 @@ async function main() {
     const suiteHash = manifest.payload.suiteId;
     const evaluatorSetHash = id("AIRLOCK_EVALUATORS_V1");
     const depositAmount = parseEther("0.1");
-    const spendCeiling = paymentAmount + depositAmount;
+    const mcpReserve = paymentAmount / 4n > 0n ? paymentAmount / 4n : 1n;
+    const spendCeiling = paymentAmount + depositAmount + mcpReserve;
     const perCallCeiling = paymentAmount > depositAmount ? paymentAmount : depositAmount;
     const policyInput = {
         approvedSuiteHash: suiteHash,
@@ -193,7 +194,7 @@ async function main() {
         deniedCapabilityBitmap: 0,
         spendCeiling,
         perCallCeiling,
-        callCeiling: 2,
+        callCeiling: 3,
         capabilityTtl: 3_600,
         statusFreshness: 3_600,
         teeRequired,
@@ -296,7 +297,7 @@ async function main() {
         scopeRoot,
         spendCeiling,
         perCallCeiling,
-        2,
+        3,
         now,
         validUntil,
         1,
