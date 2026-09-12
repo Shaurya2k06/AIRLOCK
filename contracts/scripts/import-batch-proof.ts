@@ -4,6 +4,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { Contract, id, JsonRpcProvider, Wallet } from "ethers";
 import { chainInfo, proofProvider } from "@gluwa/usc-sdk";
+import { waitUntilHeightAttested } from "./attestation.js";
 
 const kinds = {
     artifact: 1,
@@ -105,7 +106,8 @@ async function main() {
     if (sourceReceipts.some((receipt) => receipt?.status !== 1)) throw new Error("Every source transaction must succeed");
 
     const waitTimeoutMs = numberEnv("ATTESTATION_WAIT_TIMEOUT_MS", 900_000) ?? 900_000;
-    await Promise.all(sourceReceipts.map((receipt) => sourceChainInfo.waitUntilHeightAttested(
+    await Promise.all(sourceReceipts.map((receipt) => waitUntilHeightAttested(
+        sourceChainInfo,
         sourceChainKey,
         receipt!.blockNumber,
         numberEnv("ATTESTATION_POLL_INTERVAL_MS", 5_000),
