@@ -1,1 +1,37 @@
-{"builder":"airlock-local","sourceRevision":"demo","reproducible":true}
+{
+  "_type": "https://in-toto.io/Statement/v1",
+  "subject": [
+    {
+      "name": "ghcr.io/shaurya2k06/airlock-agent",
+      "digest": {
+        "sha256": "43c9956075bd0dafa43f3162d5bc8d9f58e754fc7e13bb9790701a047295c87f"
+      }
+    }
+  ],
+  "predicateType": "https://slsa.dev/provenance/v1",
+  "predicate": {
+    "buildDefinition": {
+      "buildType": "https://github.com/slsa-framework/slsa-github-generator/generic@v1",
+      "externalParameters": {
+        "repository": "Shaurya2k06/AIRLOCK",
+        "ref": "refs/heads/main"
+      },
+      "resolvedDependencies": [
+        {
+          "uri": "git+https://github.com/Shaurya2k06/AIRLOCK@186031cf5a24d8fd257a4febf39251ec7579e069",
+          "digest": {
+            "sha1": "186031cf5a24d8fd257a4febf39251ec7579e069"
+          }
+        }
+      ]
+    },
+    "runDetails": {
+      "builder": {
+        "id": "https://github.com/slsa-framework/slsa-github-generator"
+      },
+      "metadata": {
+        "invocationId": "34676663952/1"
+      }
+    }
+  }
+}
