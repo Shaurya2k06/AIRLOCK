@@ -4,7 +4,6 @@ import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { Contract, id, JsonRpcProvider, Wallet } from "ethers";
 import { chainInfo, proofProvider } from "@gluwa/usc-sdk";
-import { waitUntilHeightAttested } from "./attestation.js";
 
 const kinds = {
     artifact: 1,
@@ -105,21 +104,19 @@ async function main() {
     if (sourceReceipts.some((receipt) => !receipt)) throw new Error("One or more source transactions were not found");
     if (sourceReceipts.some((receipt) => receipt?.status !== 1)) throw new Error("Every source transaction must succeed");
 
+    const proofBuilder = new proofProvider.service.ProofBuilder(
+        sourceChainKey,
+        required("CREDITCOIN_PROOF_BUILDER_URL"),
+        numberEnv("PROOF_BUILDER_TIMEOUT_MS", 60_000),
+    );
     const waitTimeoutMs = numberEnv("ATTESTATION_WAIT_TIMEOUT_MS", 900_000) ?? 900_000;
-    await Promise.all(sourceReceipts.map((receipt) => waitUntilHeightAttested(
-        sourceChainInfo,
+    await Promise.all(sourceReceipts.map((receipt) => proofBuilder.waitUntilHeightAttested(
         sourceChainKey,
         receipt!.blockNumber,
         numberEnv("ATTESTATION_POLL_INTERVAL_MS", 5_000),
         waitTimeoutMs,
         numberEnv("ATTESTATION_EXTRA_DELAY_MS", 15_000),
     )));
-
-    const proofBuilder = new proofProvider.service.ProofBuilder(
-        sourceChainKey,
-        required("CREDITCOIN_PROOF_BUILDER_URL"),
-        numberEnv("PROOF_BUILDER_TIMEOUT_MS", 60_000),
-    );
     const retryCount = numberEnv("WORKER_RETRIES", 4) ?? 4;
     const backoffMs = numberEnv("WORKER_BACKOFF_MS", 2_000) ?? 2_000;
     let proof;

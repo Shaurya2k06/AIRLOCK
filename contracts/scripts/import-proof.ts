@@ -4,7 +4,6 @@ import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { Contract, id, JsonRpcProvider, Wallet } from "ethers";
 import { chainInfo, proofProvider } from "@gluwa/usc-sdk";
-import { waitUntilHeightAttested } from "./attestation.js";
 
 const methods = {
     artifact: "importArtifact",
@@ -103,8 +102,7 @@ async function main() {
         numberEnv("PROOF_BUILDER_TIMEOUT_MS", 60_000),
     );
     const waitTimeoutMs = numberEnv("ATTESTATION_WAIT_TIMEOUT_MS", 900_000);
-    await waitUntilHeightAttested(
-        creditcoinChainInfo,
+    await proofBuilder.waitUntilHeightAttested(
         sourceChainKey,
         sourceReceipt.blockNumber,
         numberEnv("ATTESTATION_POLL_INTERVAL_MS", 5_000),
