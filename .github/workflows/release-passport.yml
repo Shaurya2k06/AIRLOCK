@@ -68,7 +68,7 @@ jobs:
       - name: Sign stable release content with Sigstore
         working-directory: contracts
         run: |
-          node --input-type=module -e 'import { readFile, writeFile } from "node:fs/promises"; const d=JSON.parse(await readFile("../airlock-manifest.json", "utf8")); await writeFile("/tmp/airlock-release-content.txt", ["AIRLOCK_RELEASE_CONTENT_V1", d.artifactRoot, d.payload.components.containerImageDigest, d.payload.components.sbomHash, d.payload.components.provenanceHash].join("\\n"))'
+          node --input-type=module -e 'import { readFile, writeFile } from "node:fs/promises"; const d=JSON.parse(await readFile("../airlock-manifest.json", "utf8")); await writeFile("/tmp/airlock-release-content.txt", ["AIRLOCK_RELEASE_CONTENT_V1", d.artifactRoot, d.payload.components.containerImageDigest, d.payload.components.sbomHash, d.payload.components.provenanceHash].join("\n"))'
           cosign sign-blob --yes --new-bundle-format --bundle ../fixtures/releases/demo/sigstore.bundle.json /tmp/airlock-release-content.txt
           cosign verify-blob --bundle ../fixtures/releases/demo/sigstore.bundle.json --certificate-identity "$SIGSTORE_CERTIFICATE_IDENTITY_URI" --certificate-oidc-issuer "$SIGSTORE_CERTIFICATE_ISSUER" /tmp/airlock-release-content.txt
           node scripts/build-rekor-proof.mjs ../fixtures/releases/demo/sigstore.bundle.json /tmp/airlock-release-content.txt ../fixtures/releases/demo/rekor-proof.json
