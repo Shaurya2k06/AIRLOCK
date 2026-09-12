@@ -48,6 +48,14 @@ function deploymentPath(): string {
     return resolve(process.cwd(), process.env.AIRLOCK_DEPLOYMENTS?.trim() || "../deployments.json");
 }
 
+async function previousDeployment(): Promise<any> {
+    try {
+        return JSON.parse(await readFile(deploymentPath(), "utf8"));
+    } catch {
+        return {};
+    }
+}
+
 function scopeLeaf(target: string, functionSelector: string, validator: string, constraintsHash: string): string {
     return keccak256(abi.encode(["address", "bytes4", "address", "bytes32"], [
         target,
@@ -90,6 +98,7 @@ async function sourceChainKey(provider: JsonRpcProvider, sourceChainId: number):
 }
 
 async function main() {
+    const previous = await previousDeployment();
     const sourceRpc = new JsonRpcProvider(required("SOURCE_CHAIN_RPC_URL"));
     const creditcoinRpc = new JsonRpcProvider(required("CREDITCOIN_RPC_URL"));
     const sourceDeployer = new Wallet(required("SOURCE_DEPLOYER_PRIVATE_KEY"), sourceRpc);
@@ -305,6 +314,7 @@ async function main() {
     const statusTx = await send(statusRegistry.connect(statusAuthority), "checkpoint", orgId, digest, 1, 1, now, validUntil);
 
     const deployment = {
+        ...(previous.identity ? { identity: previous.identity } : {}),
         generatedAt: new Date().toISOString(),
         source: {
             chainId: sourceChainId,
