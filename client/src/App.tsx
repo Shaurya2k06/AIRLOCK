@@ -457,6 +457,19 @@ function DemoPage({ onHome }: { onHome: () => void }) {
     try {
       for (const planStep of liveRunPlan) {
         updateStep(planStep.id, { status: 'running', message: 'Submitting…' })
+        const runbookStep = runbook?.steps.find((step) => step.id === planStep.id)
+        const cachedProtocolStep = (planStep.id === 'credential' || planStep.id === 'mcp')
+          && currentOverview?.release.status === 'REVOKED'
+          && Boolean(currentOverview?.transactions?.live?.allowedActionTx)
+          && Boolean(currentOverview?.transactions?.proofs?.revocation?.creditcoinTxHash)
+        // ponytail: replay persisted receipts after a completed run; start a fresh deployment for new chain state.
+        if (runbookStep?.status === 'COMPLETE' || cachedProtocolStep) {
+          currentOverview = await refreshOverview()
+          const message = 'Replayed the persisted on-chain result'
+          updateStep(planStep.id, { status: 'complete', message, links: linksForLiveStep(currentOverview, planStep.id) })
+          setLiveRunMessage(message)
+          continue
+        }
         let result: RunbookResult
         if (planStep.id === 'credential') {
           const credentialResult = await issueCredential(operatorToken)
@@ -466,7 +479,6 @@ function DemoPage({ onHome }: { onHome: () => void }) {
           const mcpResult = await callMcp(currentOverview, issuedCredential)
           result = { ok: mcpResult.ok, message: mcpResult.message, overview: mcpResult.overview }
         } else {
-          const runbookStep = runbook.steps.find((step) => step.id === planStep.id)
           if (!runbookStep) throw new Error(`${planStep.label} is not available in the server runbook`)
           result = await executeRunbook(runbookStep, { confirm: false, operatorToken })
         }
