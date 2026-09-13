@@ -465,9 +465,9 @@ function DemoPage({ onHome }: { onHome: () => void }) {
         // ponytail: replay persisted receipts after a completed run; start a fresh deployment for new chain state.
         if (runbookStep?.status === 'COMPLETE' || cachedProtocolStep) {
           currentOverview = await refreshOverview()
-          const message = 'Replayed the persisted on-chain result'
+          const message = `${liveStepStatus[planStep.id]} · persisted receipt`
           updateStep(planStep.id, { status: 'complete', message, links: linksForLiveStep(currentOverview, planStep.id) })
-          setLiveRunMessage(message)
+          setLiveRunMessage('Using persisted chain receipts for completed steps.')
           continue
         }
         let result: RunbookResult
@@ -485,16 +485,16 @@ function DemoPage({ onHome }: { onHome: () => void }) {
         currentOverview = result.overview || await refreshOverview()
         if (!result.ok) throw new Error(result.message)
         const links = linksForLiveStep(currentOverview, planStep.id)
-        updateStep(planStep.id, { status: 'complete', message: result.message, links })
-        setLiveRunMessage(result.message)
+        const message = liveStepStatus[planStep.id] || 'Step complete'
+        updateStep(planStep.id, { status: 'complete', message, links })
+        setLiveRunMessage(message)
       }
       setLiveRunState('complete')
       setLiveRunMessage('Live protocol path complete: authority was issued, used, revoked, and rejected after revocation.')
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'live run failed'
+    } catch {
       setLiveRunState('failed')
-      setLiveRunMessage(message)
-      setLiveRunSteps((current) => current.map((step) => step.status === 'running' ? { ...step, status: 'failed', message } : step))
+      setLiveRunMessage('Live protocol path stopped. The failing step is marked below.')
+      setLiveRunSteps((current) => current.map((step) => step.status === 'running' ? { ...step, status: 'failed', message: 'Step failed' } : step))
     }
   }
 
@@ -568,12 +568,25 @@ const liveStepTechnical: Record<string, string> = {
   blocked: 'The previously signed intent is replayed as a static call. The router rejects it because the release status is revoked.',
 }
 
+const liveStepStatus: Record<string, string> = {
+  preflight: 'Checks passed',
+  deploy: 'Release published',
+  'proof-batch': 'Four evidence events imported',
+  execute: 'Capability issued; allowed call confirmed',
+  deposit: 'Bounded deposit confirmed',
+  credential: 'Scoped credential issued',
+  mcp: 'Authorized MCP payment confirmed',
+  revoke: 'Release revocation published',
+  'proof-revocation': 'Revocation proof imported',
+  blocked: 'Post-revocation call rejected',
+}
+
 function LiveRunPanel({ state, steps, message, overview, protocol, passport, writesEnabled, onRun }: { state: 'idle' | 'running' | 'complete' | 'failed'; steps: LiveRunStep[]; message: string; overview: Overview | null; protocol: Protocol | null; passport: ReleasePassport | null; writesEnabled: boolean; onRun: () => void }) {
   const proofLinks = allProofLinks(overview)
   const liveLinks = Object.entries(overview?.transactions?.live ?? {}).map(([name, hash]) => explorerLink(hash, CREDITCOIN_EXPLORER, `Creditcoin ${name.replace(/Tx$/, '')}`)).filter((link): link is ExplorerLink => Boolean(link))
   const proofRecords = Object.entries(overview?.transactions?.proofs ?? {}).filter(([kind]) => kind !== 'batch')
   return <div className="detail-page live-run-page"><div className="page-heading"><div><div className="eyebrow"><span className="eyebrow-line" /> AIRLOCK / LIVE PROTOCOL</div><h1>Run the authority path</h1><p>Deploy, prove, authorize, execute, revoke, and verify the final rejection from one control surface.</p></div><button className="primary-button" onClick={onRun} disabled={state === 'running' || !writesEnabled}><Icon name={state === 'running' ? 'activity' : 'play'} size={15} />{state === 'running' ? 'Running…' : state === 'complete' ? 'Run again' : writesEnabled ? 'Run end to end' : 'Writes disabled'}</button></div>
-    {message && <pre className={`live-run-message ${state}`}>{message}</pre>}
+    {message && <div className={`live-run-message ${state}`}>{message}</div>}
     <div className="live-run-trust"><div><span>Runtime</span><strong>{protocol?.runtimeAssurance.level ?? '—'} · {protocol?.runtimeAssurance.name ?? 'unavailable'}</strong><small>{shortHash(protocol?.runtimeAssurance.binding?.measurement)} measurement</small></div><div><span>Passport</span><strong>{passport?.passportVerification?.verified ? 'verified' : 'unavailable'}</strong><small>{passport ? `${passport.fileCount} files · ${passport.releaseDigest}` : 'release content not loaded'}</small></div><div><span>Identity</span><strong>{protocol?.identity.configured ? `ERC-8004 #${protocol.identity.agentId}` : 'unavailable'}</strong><small>{protocol?.identity.agentRegistry ?? 'agent registry not configured'}</small></div></div>
     <div className="live-run-layout"><section className="panel live-run-panel"><div className="panel-header"><div><div className="panel-kicker">LIVE RUN</div><h2>Protocol steps</h2></div><span className={`runbook-mode ${state === 'complete' ? 'enabled' : ''}`}><span className="status-dot" /> {state}</span></div><div className="live-run-list">{steps.map((step, index) => <div className={`live-run-row ${step.status}`} key={step.id}><span className="live-run-number">{String(index + 1).padStart(2, '0')}</span><span className="live-run-dot" /><div className="live-run-copy"><strong>{step.label}</strong><small>{step.message || step.status}</small><p className="live-run-detail">{liveStepTechnical[step.id]}</p>{step.links.length > 0 && <div className="live-run-links">{step.links.map((link) => <a href={link.href} target="_blank" rel="noreferrer" key={`${step.id}-${link.href}`}>{link.label} <Icon name="external" size={11} /></a>)}</div>}</div></div>)}</div></section>
       <section className="panel live-evidence-panel"><div className="panel-header"><div><div className="panel-kicker">CHAIN RECEIPTS</div><h2>Evidence ledger</h2></div><span className="live-pill"><span className="status-dot" /> {overview?.network.destination ?? 'waiting'}</span></div><div className="live-state-grid"><div><span>Release</span><strong>{overview?.release.status ?? '—'}</strong></div><div><span>Evidence</span><strong>{overview ? `${overview.evidence.filter((item) => item.status === 'PROVEN' || item.status === 'REVOKED').length} / 4` : '—'}</strong></div><div><span>Capability</span><strong>{overview?.capability.status ?? '—'}</strong></div></div><div className="live-proof-list">{proofRecords.map(([kind, record]) => <div className="live-proof-row" key={kind}><div><strong>{kind}</strong><small>{record.txHash ? 'source event' : 'proof pending'} · {record.creditcoinTxHash ? 'imported on Creditcoin' : 'import pending'}</small></div><div>{record.txHash && <a href={`${SEPOLIA_EXPLORER}${record.txHash}`} target="_blank" rel="noreferrer">Sepolia <Icon name="external" size={11} /></a>}{record.creditcoinTxHash && <a href={`${CREDITCOIN_EXPLORER}${record.creditcoinTxHash}`} target="_blank" rel="noreferrer">Creditcoin <Icon name="external" size={11} /></a>}</div></div>)}</div>{(proofLinks.length > 0 || liveLinks.length > 0) && <div className="live-ledger-footer"><span>{proofLinks.length + liveLinks.length} explorer links captured from the current run</span><div>{[...proofLinks, ...liveLinks].map((link) => <a href={link.href} target="_blank" rel="noreferrer" key={link.href}>{link.label} <Icon name="external" size={11} /></a>)}</div></div>}</section></div>

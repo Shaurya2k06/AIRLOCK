@@ -750,7 +750,7 @@ code { color: var(--olive-char); font: 400 11px/17px var(--mono); }
 .expanded-row > a:hover { color: #000; }
 
 .live-run-page { max-width: 1200px; }
-.live-run-message { max-height: 150px; margin: 0 0 24px; padding: 14px 16px; overflow: auto; white-space: pre-wrap; color: #000; border: 1px solid var(--ash); border-radius: 3px; background: var(--bone); font: 400 10px/1.5 var(--mono); }
+.live-run-message { margin: 0 0 24px; padding: 14px 16px; color: #000; border: 1px solid var(--ash); border-radius: 3px; background: var(--bone); font: 500 10px/1.5 var(--mono); }
 .live-run-message.complete { border-color: var(--olive-char); }
 .live-run-message.failed { border-color: var(--khaki); }
 .live-run-layout { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(320px, .95fr); gap: 24px; }
