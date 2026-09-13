@@ -31,7 +31,6 @@ const maxBodyBytes = 16 * 1024
 const deploymentsFile = process.env.AIRLOCK_DEPLOYMENTS || path.join(__dirname, '..', 'deployments.json')
 const contractsDir = path.join(__dirname, '..', 'contracts')
 const commandTimeoutMs = Number(process.env.AIRLOCK_COMMAND_TIMEOUT_MS || 15 * 60 * 1000)
-const localHosts = new Set(['127.0.0.1', 'localhost', '::1'])
 const ZERO_ADDRESS = `0x${'00'.repeat(20)}`
 const DEFAULT_IDENTITY_RPC_URL = 'https://ethereum-sepolia-rpc.publicnode.com'
 const writeOrigins = new Set((process.env.AIRLOCK_CLIENT_ORIGIN || 'http://127.0.0.1:5173,http://localhost:5173').split(',').map((value) => value.trim()).filter(Boolean))
@@ -503,10 +502,8 @@ async function overview() {
 function runbook(deployment) {
   const proofs = deployment?.proofs || {}
   const live = deployment?.live || {}
-  const writeAuthRequired = !localHosts.has(host)
   const writesEnabled = Boolean(process.env.CREDITCOIN_RPC_URL)
     && process.env.AIRLOCK_ENABLE_WRITES === 'true'
-    && (!writeAuthRequired || Boolean(process.env.AIRLOCK_WRITE_TOKEN?.trim()))
   const complete = (value) => Boolean(value)
   const steps = [
     { id: 'preflight', label: 'Preflight checks', command: 'npm run live:check', kind: 'read-only', status: 'READY', canRun: true },
@@ -531,16 +528,8 @@ function runbook(deployment) {
   return {
     mode: deployment && process.env.CREDITCOIN_RPC_URL ? 'live' : 'unavailable',
     writesEnabled,
-    writeAuthRequired: writesEnabled && writeAuthRequired,
     steps: steps.map(({ env, ...step }) => ({ ...step, requiresWrite: step.kind === 'write' })),
   }
-}
-
-function writeAuthorized(request) {
-  if (localHosts.has(host)) return true
-  const configuredToken = process.env.AIRLOCK_WRITE_TOKEN?.trim()
-  const authorization = request.headers.authorization || ''
-  return Boolean(configuredToken && authorization === `Bearer ${configuredToken}`)
 }
 
 const runbookCommands = new Map([
@@ -766,7 +755,6 @@ const server = http.createServer(async (request, response) => {
   }
   if (request.method === 'POST' && url.pathname === '/api/credentials/issue') {
     try {
-      if (!writeAuthorized(request)) return json(response, process.env.AIRLOCK_WRITE_TOKEN ? 401 : 503, { ok: false, error: 'operator authorization required' })
       const deployment = await readDeployment()
       const current = await overview()
       json(response, 200, await issueCredential(request, deployment, current))
@@ -777,7 +765,6 @@ const server = http.createServer(async (request, response) => {
   }
   if (request.method === 'POST' && url.pathname === '/api/credentials/delegate') {
     try {
-      if (!writeAuthorized(request)) return json(response, process.env.AIRLOCK_WRITE_TOKEN ? 401 : 503, { ok: false, error: 'operator authorization required' })
       const deployment = await readDeployment()
       const current = await overview()
       json(response, 200, await issueDelegatedCredential(request, deployment, current, await body(request)))
@@ -928,9 +915,6 @@ const server = http.createServer(async (request, response) => {
       if (!selected) return json(response, 400, { ok: false, error: 'unknown runbook step' })
       if (selected.requiresWrite && process.env.AIRLOCK_ENABLE_WRITES !== 'true') {
         return json(response, 403, { ok: false, error: 'write actions are disabled; set AIRLOCK_ENABLE_WRITES=true on the server' })
-      }
-      if (selected.requiresWrite && !writeAuthorized(request)) {
-        return json(response, process.env.AIRLOCK_WRITE_TOKEN ? 401 : 503, { ok: false, error: process.env.AIRLOCK_WRITE_TOKEN ? 'operator authorization required' : 'remote writes require AIRLOCK_WRITE_TOKEN on the server' })
       }
       if (selected.requiresWrite && request.headers.origin && !writeOrigins.has(request.headers.origin)) {
         return json(response, 403, { ok: false, error: 'write origin is not allowed; set AIRLOCK_CLIENT_ORIGIN on the server' })

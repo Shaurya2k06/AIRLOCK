@@ -271,9 +271,8 @@ preflight
 ```
 
 Every live step returns source-chain and/or Creditcoin explorer links. The
-browser never receives private keys or RPC credentials. Hosted write actions
-require `AIRLOCK_ENABLE_WRITES=true`, `AIRLOCK_WRITE_TOKEN`, and an allowed
-browser origin.
+browser never receives private keys or RPC credentials. Hosted writes require
+`AIRLOCK_ENABLE_WRITES=true` and an allowed browser origin.
 
 ## Run locally
 
@@ -344,8 +343,8 @@ PAYMENT_AMOUNT
 TEE-required deployments additionally need `TEE_REQUIRED=true`,
 `TEE_MEASUREMENT`, and `TEE_QUOTE_HASH`, validated independently by the
 verifier before `register-tee-binding`. The server needs
-`CREDITCOIN_RPC_URL`, `AIRLOCK_ENABLE_WRITES`, `AIRLOCK_WRITE_TOKEN`,
-`AIRLOCK_CLIENT_ORIGIN`, and optionally `AIRLOCK_OCI_IMAGE_REF` plus registry
+`CREDITCOIN_RPC_URL`, `AIRLOCK_ENABLE_WRITES`, `AIRLOCK_CLIENT_ORIGIN`, and
+optionally `AIRLOCK_OCI_IMAGE_REF` plus registry
 credentials for private OCI images. The client only needs `VITE_API_URL` when
 the API is not the production default.
 

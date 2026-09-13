@@ -93,7 +93,7 @@ type ReleasePassport = {
 
 type DisplayEvidence = { label: string; detail: string; time?: string; status: string; icon: IconName; txHash?: string; creditcoinTxHash?: string; sourceChainKey?: number; sourceEmitter?: string; sourceTopic0?: string; sourceBlock?: number; logIndex?: number; receiptStatus?: number }
 type RunbookStep = { id: string; label: string; command: string; kind: string; status: string; canRun: boolean; requiresWrite: boolean }
-type Runbook = { mode: string; writesEnabled: boolean; writeAuthRequired?: boolean; steps: RunbookStep[] }
+type Runbook = { mode: string; writesEnabled: boolean; steps: RunbookStep[] }
 type ExplorerLink = { label: string; hash: string; href: string }
 type LiveRunStep = { id: string; label: string; status: 'queued' | 'running' | 'complete' | 'failed'; message?: string; links: ExplorerLink[] }
 type RunbookResult = { ok: boolean; message: string; runbook?: Runbook; overview?: Overview; output?: string }
@@ -244,7 +244,6 @@ function DemoPage({ onHome }: { onHome: () => void }) {
   const [runbook, setRunbook] = useState<Runbook | null>(null)
   const [runbookRunning, setRunbookRunning] = useState('')
   const [runbookMessage, setRunbookMessage] = useState('')
-  const [writeToken, setWriteToken] = useState('')
   const [loadError, setLoadError] = useState(false)
   const [protocol, setProtocol] = useState<Protocol | null>(null)
   const [passport, setPassport] = useState<ReleasePassport | null>(null)
@@ -271,20 +270,9 @@ function DemoPage({ onHome }: { onHome: () => void }) {
     return () => { mounted = false }
   }, [])
 
-  const issueCredential = async (operatorTokenOverride?: string): Promise<{ ok: boolean; message: string; token?: string }> => {
-    const operatorToken = runbook?.writeAuthRequired && !writeToken
-      ? operatorTokenOverride || window.prompt('Enter the AIRLOCK operator token')?.trim() || ''
-      : operatorTokenOverride || writeToken
-    if (runbook?.writeAuthRequired && !operatorToken) {
-      const message = 'operator token required; no credential was issued'
-      setProtocolMessage(message)
-      return { ok: false, message }
-    }
-    if (operatorToken && operatorToken !== writeToken) setWriteToken(operatorToken)
+  const issueCredential = async (): Promise<{ ok: boolean; message: string; token?: string }> => {
     try {
-      const headers: Record<string, string> = { 'content-type': 'application/json' }
-      if (operatorToken) headers.authorization = `Bearer ${operatorToken}`
-      const response = await fetch(`${API_URL}/api/credentials/issue`, { method: 'POST', headers, body: '{}' })
+      const response = await fetch(`${API_URL}/api/credentials/issue`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
       const value = await response.json() as { credential?: object; signature?: string; error?: string }
       if (!response.ok || !value.credential || !value.signature) throw new Error(value.error || 'credential issuance failed')
       const encoded = btoa(JSON.stringify({ credential: value.credential, signature: value.signature })).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
@@ -356,25 +344,14 @@ function DemoPage({ onHome }: { onHome: () => void }) {
     return null
   }, [actionResult, actionReason])
 
-  const executeRunbook = async (step: RunbookStep, options: { confirm?: boolean; operatorToken?: string } = {}): Promise<RunbookResult> => {
+  const executeRunbook = async (step: RunbookStep, options: { confirm?: boolean } = {}): Promise<RunbookResult> => {
     if (step.requiresWrite && options.confirm !== false && !window.confirm(`Run ${step.label}? This may send a real testnet transaction.`)) return { ok: false, message: 'action cancelled' }
-    const operatorToken = step.requiresWrite && runbook?.writeAuthRequired && !writeToken
-      ? options.operatorToken || window.prompt('Enter the AIRLOCK operator token')?.trim() || ''
-      : options.operatorToken || writeToken
-    if (step.requiresWrite && runbook?.writeAuthRequired && !operatorToken) {
-      const message = 'operator token required; no action was submitted'
-      setRunbookMessage(message)
-      return { ok: false, message }
-    }
-    if (operatorToken && operatorToken !== writeToken) setWriteToken(operatorToken)
     setRunbookRunning(step.id)
     setRunbookMessage('')
     const beforeOverview = overview
     try {
-      const headers: Record<string, string> = { 'content-type': 'application/json' }
-      if (operatorToken) headers.authorization = `Bearer ${operatorToken}`
       const response = await fetch(`${API_URL}/api/runbook/execute`, {
-        method: 'POST', headers, body: JSON.stringify({ step: step.id }),
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ step: step.id }),
       })
       const result = await response.json() as { ok?: boolean; output?: string; error?: string; runbook?: Runbook }
       if (result.runbook) setRunbook(result.runbook)
@@ -391,7 +368,7 @@ function DemoPage({ onHome }: { onHome: () => void }) {
       return { ok: Boolean(result.ok && response.ok), message, runbook: result.runbook, overview: nextOverview, output: result.output }
     } catch {
       setRunbookMessage(`${step.label} is running on the control plane…`)
-      const recovered = await waitForRunbookStep(step, beforeOverview, operatorToken ? { authorization: `Bearer ${operatorToken}` } : {}, (nextRunbook, nextOverview) => {
+      const recovered = await waitForRunbookStep(step, beforeOverview, {}, (nextRunbook, nextOverview) => {
         if (nextRunbook) setRunbook(nextRunbook)
         if (nextOverview) setOverview(nextOverview)
       })
@@ -425,16 +402,6 @@ function DemoPage({ onHome }: { onHome: () => void }) {
       return
     }
     if (!window.confirm('Run the complete live protocol path? This submits real testnet transactions and ends with a revocation check.')) return
-    const operatorToken = runbook.writeAuthRequired && !writeToken
-      ? window.prompt('Enter the AIRLOCK operator token')?.trim() || ''
-      : writeToken
-    if (runbook.writeAuthRequired && !operatorToken) {
-      const message = 'operator token required; no live run was submitted'
-      setLiveRunState('failed')
-      setLiveRunMessage(message)
-      return
-    }
-    if (operatorToken && operatorToken !== writeToken) setWriteToken(operatorToken)
     setCredentialToken('')
     setLiveRunSteps(liveRunPlan.map((step) => ({ ...step, status: 'queued' as const, links: [] })))
     setLiveRunState('running')
@@ -458,21 +425,9 @@ function DemoPage({ onHome }: { onHome: () => void }) {
       for (const planStep of liveRunPlan) {
         updateStep(planStep.id, { status: 'running', message: 'Submitting…' })
         const runbookStep = runbook?.steps.find((step) => step.id === planStep.id)
-        const cachedProtocolStep = (planStep.id === 'credential' || planStep.id === 'mcp')
-          && currentOverview?.release.status === 'REVOKED'
-          && Boolean(currentOverview?.transactions?.live?.allowedActionTx)
-          && Boolean(currentOverview?.transactions?.proofs?.revocation?.creditcoinTxHash)
-        // ponytail: replay persisted receipts after a completed run; start a fresh deployment for new chain state.
-        if (runbookStep?.status === 'COMPLETE' || cachedProtocolStep) {
-          currentOverview = await refreshOverview()
-          const message = `${liveStepStatus[planStep.id]} · persisted receipt`
-          updateStep(planStep.id, { status: 'complete', message, links: linksForLiveStep(currentOverview, planStep.id) })
-          setLiveRunMessage('Using persisted chain receipts for completed steps.')
-          continue
-        }
         let result: RunbookResult
         if (planStep.id === 'credential') {
-          const credentialResult = await issueCredential(operatorToken)
+          const credentialResult = await issueCredential()
           issuedCredential = credentialResult.token || issuedCredential
           result = { ok: credentialResult.ok, message: credentialResult.message }
         } else if (planStep.id === 'mcp') {
@@ -480,7 +435,7 @@ function DemoPage({ onHome }: { onHome: () => void }) {
           result = { ok: mcpResult.ok, message: mcpResult.message, overview: mcpResult.overview }
         } else {
           if (!runbookStep) throw new Error(`${planStep.label} is not available in the server runbook`)
-          result = await executeRunbook(runbookStep, { confirm: false, operatorToken })
+          result = await executeRunbook(runbookStep, { confirm: false })
         }
         currentOverview = result.overview || await refreshOverview()
         if (!result.ok) throw new Error(result.message)
@@ -585,10 +540,12 @@ function LiveRunPanel({ state, steps, message, overview, protocol, passport, wri
   const proofLinks = allProofLinks(overview)
   const liveLinks = Object.entries(overview?.transactions?.live ?? {}).map(([name, hash]) => explorerLink(hash, CREDITCOIN_EXPLORER, `Creditcoin ${name.replace(/Tx$/, '')}`)).filter((link): link is ExplorerLink => Boolean(link))
   const proofRecords = Object.entries(overview?.transactions?.proofs ?? {}).filter(([kind]) => kind !== 'batch')
+  const activeIndex = steps.findIndex((step) => step.status === 'running' || step.status === 'failed' || step.status === 'queued')
+  const visibleSteps = state === 'complete' || activeIndex < 0 ? steps : steps.slice(0, activeIndex + 1)
   return <div className="detail-page live-run-page"><div className="page-heading"><div><div className="eyebrow"><span className="eyebrow-line" /> AIRLOCK / LIVE PROTOCOL</div><h1>Run the authority path</h1><p>Deploy, prove, authorize, execute, revoke, and verify the final rejection from one control surface.</p></div><button className="primary-button" onClick={onRun} disabled={state === 'running' || !writesEnabled}><Icon name={state === 'running' ? 'activity' : 'play'} size={15} />{state === 'running' ? 'Running…' : state === 'complete' ? 'Run again' : writesEnabled ? 'Run end to end' : 'Writes disabled'}</button></div>
     {message && <div className={`live-run-message ${state}`}>{message}</div>}
     <div className="live-run-trust"><div><span>Runtime</span><strong>{protocol?.runtimeAssurance.level ?? '—'} · {protocol?.runtimeAssurance.name ?? 'unavailable'}</strong><small>{shortHash(protocol?.runtimeAssurance.binding?.measurement)} measurement</small></div><div><span>Passport</span><strong>{passport?.passportVerification?.verified ? 'verified' : 'unavailable'}</strong><small>{passport ? `${passport.fileCount} files · ${passport.releaseDigest}` : 'release content not loaded'}</small></div><div><span>Identity</span><strong>{protocol?.identity.configured ? `ERC-8004 #${protocol.identity.agentId}` : 'unavailable'}</strong><small>{protocol?.identity.agentRegistry ?? 'agent registry not configured'}</small></div></div>
-    <div className="live-run-layout"><section className="panel live-run-panel"><div className="panel-header"><div><div className="panel-kicker">LIVE RUN</div><h2>Protocol steps</h2></div><span className={`runbook-mode ${state === 'complete' ? 'enabled' : ''}`}><span className="status-dot" /> {state}</span></div><div className="live-run-list">{steps.map((step, index) => <div className={`live-run-row ${step.status}`} key={step.id}><span className="live-run-number">{String(index + 1).padStart(2, '0')}</span><span className="live-run-dot" /><div className="live-run-copy"><strong>{step.label}</strong><small>{step.message || step.status}</small><p className="live-run-detail">{liveStepTechnical[step.id]}</p>{step.links.length > 0 && <div className="live-run-links">{step.links.map((link) => <a href={link.href} target="_blank" rel="noreferrer" key={`${step.id}-${link.href}`}>{link.label} <Icon name="external" size={11} /></a>)}</div>}</div></div>)}</div></section>
+    <div className="live-run-layout"><section className="panel live-run-panel"><div className="panel-header"><div><div className="panel-kicker">LIVE RUN</div><h2>Protocol steps</h2></div><span className={`runbook-mode ${state === 'complete' ? 'enabled' : ''}`}><span className="status-dot" /> {state === 'complete' ? 'complete' : `${visibleSteps.length} / ${steps.length}`}</span></div><div className="live-run-list">{visibleSteps.map((step, index) => <div className={`live-run-row ${step.status}`} key={step.id}><span className="live-run-number">{String(index + 1).padStart(2, '0')}</span><span className="live-run-dot" /><div className="live-run-copy"><strong>{step.label}</strong><small>{step.message || step.status}</small><p className="live-run-detail">{liveStepTechnical[step.id]}</p>{step.links.length > 0 && <div className="live-run-links">{step.links.map((link) => <a href={link.href} target="_blank" rel="noreferrer" key={`${step.id}-${link.href}`}>{link.label} <Icon name="external" size={11} /></a>)}</div>}</div></div>)}</div></section>
       <section className="panel live-evidence-panel"><div className="panel-header"><div><div className="panel-kicker">CHAIN RECEIPTS</div><h2>Evidence ledger</h2></div><span className="live-pill"><span className="status-dot" /> {overview?.network.destination ?? 'waiting'}</span></div><div className="live-state-grid"><div><span>Release</span><strong>{overview?.release.status ?? '—'}</strong></div><div><span>Evidence</span><strong>{overview ? `${overview.evidence.filter((item) => item.status === 'PROVEN' || item.status === 'REVOKED').length} / 4` : '—'}</strong></div><div><span>Capability</span><strong>{overview?.capability.status ?? '—'}</strong></div></div><div className="live-proof-list">{proofRecords.map(([kind, record]) => <div className="live-proof-row" key={kind}><div><strong>{kind}</strong><small>{record.txHash ? 'source event' : 'proof pending'} · {record.creditcoinTxHash ? 'imported on Creditcoin' : 'import pending'}</small></div><div>{record.txHash && <a href={`${SEPOLIA_EXPLORER}${record.txHash}`} target="_blank" rel="noreferrer">Sepolia <Icon name="external" size={11} /></a>}{record.creditcoinTxHash && <a href={`${CREDITCOIN_EXPLORER}${record.creditcoinTxHash}`} target="_blank" rel="noreferrer">Creditcoin <Icon name="external" size={11} /></a>}</div></div>)}</div>{(proofLinks.length > 0 || liveLinks.length > 0) && <div className="live-ledger-footer"><span>{proofLinks.length + liveLinks.length} explorer links captured from the current run</span><div>{[...proofLinks, ...liveLinks].map((link) => <a href={link.href} target="_blank" rel="noreferrer" key={link.href}>{link.label} <Icon name="external" size={11} /></a>)}</div></div>}</section></div>
   </div>
 }
